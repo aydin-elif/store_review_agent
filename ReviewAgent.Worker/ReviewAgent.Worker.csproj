@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>dotnet-ReviewAgent.Worker-8e0be310-9bca-4fcd-89a3-6e209ae125fe</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+    <PackageReference Include="MongoDB.Driver" Version="3.11.0" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ReviewAgent.Connectors\ReviewAgent.Connectors.csproj" />
+    <ProjectReference Include="..\ReviewAgent.AI\ReviewAgent.AI.csproj" />
+    <ProjectReference Include="..\ReviewAgent.Data\ReviewAgent.Data.csproj" />
+    <ProjectReference Include="..\ReviewAgent.Slack\ReviewAgent.Slack.csproj" />
+  </ItemGroup>
+</Project>

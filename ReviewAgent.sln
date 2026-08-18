@@ -1,0 +1,52 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReviewAgent.Worker", "ReviewAgent.Worker\ReviewAgent.Worker.csproj", "{E6981564-53A6-476A-AE86-6F132936A665}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReviewAgent.Connectors", "ReviewAgent.Connectors\ReviewAgent.Connectors.csproj", "{322BC946-2E23-4C96-A4E4-2A456AAAC9E6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReviewAgent.AI", "ReviewAgent.AI\ReviewAgent.AI.csproj", "{5520DD13-E409-4FE8-B6CF-9A84104B3534}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReviewAgent.Data", "ReviewAgent.Data\ReviewAgent.Data.csproj", "{5F22CDF5-4678-457B-80AD-7EDBDF2B6E6B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReviewAgent.Slack", "ReviewAgent.Slack\ReviewAgent.Slack.csproj", "{8A7B678D-671D-4AF0-901F-B12BAFCFB94E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ReviewAgent.Tests", "ReviewAgent.Tests\ReviewAgent.Tests.csproj", "{0B4471D5-40BA-4EF0-96D1-C3F35699A88F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E6981564-53A6-476A-AE86-6F132936A665}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E6981564-53A6-476A-AE86-6F132936A665}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E6981564-53A6-476A-AE86-6F132936A665}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E6981564-53A6-476A-AE86-6F132936A665}.Release|Any CPU.Build.0 = Release|Any CPU
+		{322BC946-2E23-4C96-A4E4-2A456AAAC9E6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{322BC946-2E23-4C96-A4E4-2A456AAAC9E6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{322BC946-2E23-4C96-A4E4-2A456AAAC9E6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{322BC946-2E23-4C96-A4E4-2A456AAAC9E6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5520DD13-E409-4FE8-B6CF-9A84104B3534}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5520DD13-E409-4FE8-B6CF-9A84104B3534}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5520DD13-E409-4FE8-B6CF-9A84104B3534}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5520DD13-E409-4FE8-B6CF-9A84104B3534}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5F22CDF5-4678-457B-80AD-7EDBDF2B6E6B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5F22CDF5-4678-457B-80AD-7EDBDF2B6E6B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5F22CDF5-4678-457B-80AD-7EDBDF2B6E6B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5F22CDF5-4678-457B-80AD-7EDBDF2B6E6B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8A7B678D-671D-4AF0-901F-B12BAFCFB94E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8A7B678D-671D-4AF0-901F-B12BAFCFB94E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8A7B678D-671D-4AF0-901F-B12BAFCFB94E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8A7B678D-671D-4AF0-901F-B12BAFCFB94E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0B4471D5-40BA-4EF0-96D1-C3F35699A88F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0B4471D5-40BA-4EF0-96D1-C3F35699A88F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0B4471D5-40BA-4EF0-96D1-C3F35699A88F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0B4471D5-40BA-4EF0-96D1-C3F35699A88F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

@@ -1,0 +1,39 @@
+# Store Review Intelligence Agent — Cursor Rules
+
+Bu proje BtcTurk için bir **Store Review Intelligence Agent**'tır (klasör adı: `store_review_agent`).
+
+## Stack & Runtime
+
+- **.NET 8 / C#** kullanıyoruz.
+- **MongoDB.Driver** ile local Docker'da çalışan MongoDB'ye bağlanıyoruz (veritabanı adı: `review_agent`).
+- **Async/await** her yerde kullanılıyor.
+- **Nullable reference types** aktif.
+
+## Solution Layers
+
+| Proje | Rol |
+|-------|-----|
+| `ReviewAgent.Worker` | Host / background worker |
+| `ReviewAgent.Connectors` | App Store + Google Play API bağlayıcıları |
+| `ReviewAgent.AI` | Sentiment / kategori analizi |
+| `ReviewAgent.Data` | MongoDB repository |
+| `ReviewAgent.Slack` | Slack bot |
+
+## Apps — Runtime Configuration (Kritik)
+
+Uygulamalar (Global / Kripto / Hisse vb.) koda gömülü sabit değer **DEĞİL**.
+
+- Uygulama tanımları MongoDB **`apps`** koleksiyonunda çalışma zamanında kayıtlıdır.
+- Kod **generic / parametrik** yazılmalı; app id, store, paket adı vb. hardcode edilmemeli.
+- Yeni bir uygulama eklemek kod değişikliği gerektirmemeli — `apps` koleksiyonuna kayıt yeterli olmalı.
+
+## Secrets
+
+- API key'ler **asla** koda veya `appsettings.json`'a yazılmaz.
+- Hassas değerler **user-secrets** (veya ortam değişkenleri / secret store) üzerinden okunur.
+
+## Coding Expectations
+
+- Explicit types tercih et; gereksiz abstraction ekleme (YAGNI).
+- Katman sınırlarına saygı göster: connector / AI / data / Slack sorumluluklarını karıştırma.
+- BtcTurk C# naming, layout ve member-order kurallarına uy.
