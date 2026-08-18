@@ -42,4 +42,20 @@ Console.WriteLine("İki kere upsert edildi, tekrar kontrolü Compass'ta yapılac
 builder.Services.AddHostedService<Worker>();
 
 IHost host = builder.Build();
+
+var notifier = new ReviewAgent.Slack.ConsoleSlackNotifier();
+var testStats = new ReviewAgent.Slack.Models.DailySummaryStats
+{
+    AppDisplayName = "Bithero (Test)",
+    TotalReviews = 5,
+    PositiveCount = 3,
+    NegativeCount = 2,
+    TopCategory = "ux",
+    TopPriorityReviews = new() { new() { Rating = 2, Summary = "Giriş ekranı yavaş", PriorityScore = 3 } }
+};
+var payload = ReviewAgent.Slack.DailySummaryMessageBuilder.Build("#store-reviews-test", testStats);
+await notifier.SendAsync(payload);
+
+
+
 host.Run();
