@@ -12,4 +12,8 @@
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.22.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="MockData\reviews.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>
