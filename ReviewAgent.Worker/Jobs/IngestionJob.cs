@@ -1,59 +1,68 @@
 using ReviewAgent.Connectors;
-using ReviewAgent.Data;
 using ReviewAgent.Data.Models;
 using ReviewAgent.Data.Repositories;
 using ReviewAgent.Slack;
 using ReviewAgent.Slack.Models;
 
-namespace ReviewAgent.Worker;
+namespace ReviewAgent.Worker.Jobs;
 
 /// <summary>
-/// GEÇİCİ: Gerçek credential'lar gelmeden önce, tüm katmanların birbirine
-/// doğru bağlandığını doğrulamak için mock veri setiyle uçtan uca akış.
-/// Not: AI katmanı henüz bağlanmadı, kategori/öncelik skoru burada
-/// rating'e dayalı KABA bir yaklaşımla hesaplanıyor — gerçek analiz değil.
-/// Bithero credential'ları geldiğinde bu sınıf silinip yerine
-/// gerçek IngestionJob (Hangfire ile zamanlanmış) gelecek.
+/// Hangfire tarafından periyodik olarak tetiklenen ana ingestion job'ı.
+/// Şu an mock provider'lar kullanıyor; gerçek credential'lar geldiğinde
+/// yalnızca hangi IReviewProvider implementasyonunun enjekte edildiği değişecek.
 /// </summary>
-public static class DemoFlowRunner
+public class IngestionJob
 {
-    public static async Task RunAsync(
+    private readonly AppRepository _appRepository;
+    private readonly ReviewRepository _reviewRepository;
+    private readonly ISlackNotifier _notifier;
+    private readonly IReviewProvider _appStoreProvider;
+    private readonly IReviewProvider _googlePlayProvider;
+
+    public IngestionJob(
         AppRepository appRepository,
         ReviewRepository reviewRepository,
         ISlackNotifier notifier,
         IReviewProvider appStoreProvider,
         IReviewProvider googlePlayProvider)
     {
-        Console.WriteLine("=== Demo akışı başlıyor (mock veri seti) ===");
+        _appRepository = appRepository;
+        _reviewRepository = reviewRepository;
+        _notifier = notifier;
+        _appStoreProvider = appStoreProvider;
+        _googlePlayProvider = googlePlayProvider;
+    }
 
-        List<AppRegistration> activeApps = await appRepository.GetActiveAppsAsync();
-        AppRegistration? app = activeApps.FirstOrDefault();
-        if (app is null)
+    public async Task RunAsync()
+    {
+        Console.WriteLine($"[IngestionJob] Başladı: {DateTime.UtcNow:u}");
+
+        List<AppRegistration> activeApps = await _appRepository.GetActiveAppsAsync();
+
+        foreach (AppRegistration app in activeApps)
         {
-            Console.WriteLine("Aktif uygulama bulunamadı, demo durduruldu.");
-            return;
+            await ProcessAppAsync(app);
         }
 
-        List<RawReview> appStoreReviews = await appStoreProvider.FetchReviewsAsync(app.AppStore?.AppId ?? app.AppKey);
-        List<RawReview> googlePlayReviews = await googlePlayProvider.FetchReviewsAsync(app.GooglePlay?.PackageName ?? app.AppKey);
-        List<RawReview> allRawReviews = appStoreReviews.Concat(googlePlayReviews).ToList();
+        Console.WriteLine($"[IngestionJob] Tamamlandı: {DateTime.UtcNow:u}");
+    }
 
-        Console.WriteLine($"{allRawReviews.Count} yorum çekildi ({appStoreReviews.Count} App Store, {googlePlayReviews.Count} Google Play).");
+    private async Task ProcessAppAsync(AppRegistration app)
+    {
+        List<RawReview> appStoreReviews = await _appStoreProvider.FetchReviewsAsync(app.AppStore?.AppId ?? app.AppKey);
+        List<RawReview> googlePlayReviews = await _googlePlayProvider.FetchReviewsAsync(app.GooglePlay?.PackageName ?? app.AppKey);
+        List<RawReview> allRawReviews = appStoreReviews.Concat(googlePlayReviews).ToList();
 
         foreach (RawReview raw in allRawReviews)
         {
-            Review review = MapToReview(raw, app);
-            await reviewRepository.UpsertReviewAsync(review);
+            await _reviewRepository.UpsertReviewAsync(MapToReview(raw, app));
         }
 
-        Console.WriteLine("Tüm yorumlar kaydedildi (idempotent upsert).");
+        Console.WriteLine($"[IngestionJob] {app.DisplayName}: {allRawReviews.Count} yorum işlendi.");
 
         DailySummaryStats stats = BuildStats(app.DisplayName, allRawReviews);
-
         SlackMessagePayload payload = DailySummaryMessageBuilder.Build(app.SlackChannel ?? "#store-reviews-test", stats);
-        await notifier.SendAsync(payload);
-
-        Console.WriteLine("=== Demo akışı tamamlandı ===");
+        await _notifier.SendAsync(payload);
     }
 
     private static Review MapToReview(RawReview raw, AppRegistration app) => new()

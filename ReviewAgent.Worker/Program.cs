@@ -1,30 +1,58 @@
-using ReviewAgent.Data;
+using Hangfire;
+using Hangfire.Mongo;
+using Hangfire.Mongo.Migration;
+using Hangfire.Mongo.Migration.Strategies;
 using ReviewAgent.Connectors;
+using ReviewAgent.Data;
 using ReviewAgent.Data.Repositories;
 using ReviewAgent.Slack;
-using ReviewAgent.Worker;
+using ReviewAgent.Worker.Jobs;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddHostedService<Worker>();
+
+const string connectionString = "mongodb://admin:devpassword@localhost:27017";
+const string databaseName = "review_agent";
+
+builder.Services.AddSingleton(new MongoDbContext(connectionString, databaseName));
+builder.Services.AddSingleton<AppRepository>();
+builder.Services.AddSingleton<ReviewRepository>();
+builder.Services.AddSingleton<ISlackNotifier, ConsoleSlackNotifier>();
+
+builder.Services.AddSingleton<IngestionJob>(sp =>
+{
+    AppRepository appRepo = sp.GetRequiredService<AppRepository>();
+    ReviewRepository reviewRepo = sp.GetRequiredService<ReviewRepository>();
+    ISlackNotifier notifier = sp.GetRequiredService<ISlackNotifier>();
+
+    MockReviewProvider appStoreProvider = new(
+        Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_appstore.json"));
+    MockReviewProvider googlePlayProvider = new(
+        Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_googleplay.json"));
+
+    return new IngestionJob(appRepo, reviewRepo, notifier, appStoreProvider, googlePlayProvider);
+});
+
+builder.Services.AddHangfire(config => config
+    .UseMongoStorage(connectionString, "review_agent_hangfire", new MongoStorageOptions
+    {
+        MigrationOptions = new MongoMigrationOptions
+        {
+            MigrationStrategy = new MigrateMongoMigrationStrategy()
+        }
+    }));
+builder.Services.AddHangfireServer();
 
 IHost host = builder.Build();
 
-MongoDbContext context = new("mongodb://admin:devpassword@localhost:27017", "review_agent");
-AppRepository appRepository = new(context);
-ReviewRepository reviewRepository = new(context);
-ISlackNotifier notifier = new ConsoleSlackNotifier();
-string appStoreMockPath = Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_appstore.json");
-string googlePlayMockPath = Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_googleplay.json");
-IReviewProvider appStoreProvider = new MockReviewProvider(appStoreMockPath);
-IReviewProvider googlePlayProvider = new MockReviewProvider(googlePlayMockPath);
-
+MongoDbContext context = host.Services.GetRequiredService<MongoDbContext>();
+AppRepository appRepository = host.Services.GetRequiredService<AppRepository>();
 await context.EnsureIndexesAsync();
 await SeedData.RunAsync(appRepository);
-await DemoFlowRunner.RunAsync(
-    appRepository,
-    reviewRepository,
-    notifier,
-    appStoreProvider,
-    googlePlayProvider);
+
+IRecurringJobManager recurringJobManager = host.Services.GetRequiredService<IRecurringJobManager>();
+recurringJobManager.AddOrUpdate<IngestionJob>(
+    "ingestion-job",
+    job => job.RunAsync(),
+    "*/5 * * * *");
 
 host.Run();
