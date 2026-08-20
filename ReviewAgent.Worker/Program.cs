@@ -8,7 +8,7 @@ using ReviewAgent.Data.Repositories;
 using ReviewAgent.Slack;
 using ReviewAgent.Worker.Jobs;
 
-HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 const string connectionString = "mongodb://admin:devpassword@localhost:27017";
 const string databaseName = "review_agent";
@@ -42,17 +42,19 @@ builder.Services.AddHangfire(config => config
     }));
 builder.Services.AddHangfireServer();
 
-IHost host = builder.Build();
+WebApplication app = builder.Build();
 
-MongoDbContext context = host.Services.GetRequiredService<MongoDbContext>();
-AppRepository appRepository = host.Services.GetRequiredService<AppRepository>();
+MongoDbContext context = app.Services.GetRequiredService<MongoDbContext>();
+AppRepository appRepository = app.Services.GetRequiredService<AppRepository>();
 await context.EnsureIndexesAsync();
 await SeedData.RunAsync(appRepository);
 
-IRecurringJobManager recurringJobManager = host.Services.GetRequiredService<IRecurringJobManager>();
+IRecurringJobManager recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
 recurringJobManager.AddOrUpdate<IngestionJob>(
     "ingestion-job",
     job => job.RunAsync(),
     "*/5 * * * *");
 
-host.Run();
+app.UseHangfireDashboard("/hangfire");
+
+app.Run();
