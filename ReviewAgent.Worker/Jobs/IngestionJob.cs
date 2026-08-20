@@ -15,6 +15,7 @@ public class IngestionJob
 {
     private readonly AppRepository _appRepository;
     private readonly ReviewRepository _reviewRepository;
+    private readonly SyncStateRepository _syncStateRepository;
     private readonly ISlackNotifier _notifier;
     private readonly IReviewProvider _appStoreProvider;
     private readonly IReviewProvider _googlePlayProvider;
@@ -22,12 +23,14 @@ public class IngestionJob
     public IngestionJob(
         AppRepository appRepository,
         ReviewRepository reviewRepository,
+        SyncStateRepository syncStateRepository,
         ISlackNotifier notifier,
         IReviewProvider appStoreProvider,
         IReviewProvider googlePlayProvider)
     {
         _appRepository = appRepository;
         _reviewRepository = reviewRepository;
+        _syncStateRepository = syncStateRepository;
         _notifier = notifier;
         _appStoreProvider = appStoreProvider;
         _googlePlayProvider = googlePlayProvider;
@@ -49,16 +52,33 @@ public class IngestionJob
 
     private async Task ProcessAppAsync(AppRegistration app)
     {
-        List<RawReview> appStoreReviews = await _appStoreProvider.FetchReviewsAsync(app.AppStore?.AppId ?? app.AppKey);
-        List<RawReview> googlePlayReviews = await _googlePlayProvider.FetchReviewsAsync(app.GooglePlay?.PackageName ?? app.AppKey);
+        DateTime lastSyncAppStore = await _syncStateRepository.GetLastSyncedAtAsync(app.Id!, "appstore") ?? DateTime.MinValue;
+        DateTime lastSyncGooglePlay = await _syncStateRepository.GetLastSyncedAtAsync(app.Id!, "googleplay") ?? DateTime.MinValue;
+
+        List<RawReview> appStoreReviews = (await _appStoreProvider.FetchReviewsAsync(app.AppStore?.AppId ?? app.AppKey))
+            .Where(r => r.ReviewDate > lastSyncAppStore)
+            .ToList();
+        List<RawReview> googlePlayReviews = (await _googlePlayProvider.FetchReviewsAsync(app.GooglePlay?.PackageName ?? app.AppKey))
+            .Where(r => r.ReviewDate > lastSyncGooglePlay)
+            .ToList();
+
         List<RawReview> allRawReviews = appStoreReviews.Concat(googlePlayReviews).ToList();
+
+        if (allRawReviews.Count == 0)
+        {
+            Console.WriteLine($"[IngestionJob] {app.DisplayName}: yeni yorum yok, atlanıyor.");
+            return;
+        }
 
         foreach (RawReview raw in allRawReviews)
         {
             await _reviewRepository.UpsertReviewAsync(MapToReview(raw, app));
         }
 
-        Console.WriteLine($"[IngestionJob] {app.DisplayName}: {allRawReviews.Count} yorum işlendi.");
+        await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "appstore", DateTime.UtcNow);
+        await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "googleplay", DateTime.UtcNow);
+
+        Console.WriteLine($"[IngestionJob] {app.DisplayName}: {allRawReviews.Count} YENİ yorum işlendi.");
 
         DailySummaryStats stats = BuildStats(app.DisplayName, allRawReviews);
         SlackMessagePayload payload = DailySummaryMessageBuilder.Build(app.SlackChannel ?? "#store-reviews-test", stats);

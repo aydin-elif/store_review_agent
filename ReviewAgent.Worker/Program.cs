@@ -16,12 +16,14 @@ const string databaseName = "review_agent";
 builder.Services.AddSingleton(new MongoDbContext(connectionString, databaseName));
 builder.Services.AddSingleton<AppRepository>();
 builder.Services.AddSingleton<ReviewRepository>();
+builder.Services.AddSingleton<SyncStateRepository>();
 builder.Services.AddSingleton<ISlackNotifier, ConsoleSlackNotifier>();
 
 builder.Services.AddSingleton<IngestionJob>(sp =>
 {
     AppRepository appRepo = sp.GetRequiredService<AppRepository>();
     ReviewRepository reviewRepo = sp.GetRequiredService<ReviewRepository>();
+    SyncStateRepository syncStateRepo = sp.GetRequiredService<SyncStateRepository>();
     ISlackNotifier notifier = sp.GetRequiredService<ISlackNotifier>();
 
     MockReviewProvider appStoreProvider = new(
@@ -29,7 +31,7 @@ builder.Services.AddSingleton<IngestionJob>(sp =>
     MockReviewProvider googlePlayProvider = new(
         Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_googleplay.json"));
 
-    return new IngestionJob(appRepo, reviewRepo, notifier, appStoreProvider, googlePlayProvider);
+    return new IngestionJob(appRepo, reviewRepo, syncStateRepo, notifier, appStoreProvider, googlePlayProvider);
 });
 
 builder.Services.AddHangfire(config => config
