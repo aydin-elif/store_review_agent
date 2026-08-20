@@ -13,6 +13,7 @@ namespace ReviewAgent.Worker.Jobs;
 /// </summary>
 public class IngestionJob
 {
+    private readonly ILogger<IngestionJob> _logger;
     private readonly AppRepository _appRepository;
     private readonly ReviewRepository _reviewRepository;
     private readonly SyncStateRepository _syncStateRepository;
@@ -22,6 +23,7 @@ public class IngestionJob
     private readonly IReviewProvider? _liveDemoProvider;
 
     public IngestionJob(
+        ILogger<IngestionJob> logger,
         AppRepository appRepository,
         ReviewRepository reviewRepository,
         SyncStateRepository syncStateRepository,
@@ -30,6 +32,7 @@ public class IngestionJob
         IReviewProvider googlePlayProvider,
         IReviewProvider? liveDemoProvider = null)
     {
+        _logger = logger;
         _appRepository = appRepository;
         _reviewRepository = reviewRepository;
         _syncStateRepository = syncStateRepository;
@@ -41,7 +44,7 @@ public class IngestionJob
 
     public async Task RunAsync()
     {
-        Console.WriteLine($"[IngestionJob] Başladı: {DateTime.UtcNow:u}");
+        _logger.LogInformation("Ingestion job başladı");
 
         List<AppRegistration> activeApps = await _appRepository.GetActiveAppsAsync();
 
@@ -50,7 +53,7 @@ public class IngestionJob
             await ProcessAppAsync(app);
         }
 
-        Console.WriteLine($"[IngestionJob] Tamamlandı: {DateTime.UtcNow:u}");
+        _logger.LogInformation("Ingestion job tamamlandı");
     }
 
     private async Task ProcessAppAsync(AppRegistration app)
@@ -75,7 +78,7 @@ public class IngestionJob
 
         if (allRawReviews.Count == 0)
         {
-            Console.WriteLine($"[IngestionJob] {app.DisplayName}: yeni yorum yok, atlanıyor.");
+            _logger.LogInformation("{AppName}: yeni yorum yok, atlanıyor", app.DisplayName);
             return;
         }
 
@@ -87,7 +90,7 @@ public class IngestionJob
         await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "appstore", DateTime.UtcNow);
         await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "googleplay", DateTime.UtcNow);
 
-        Console.WriteLine($"[IngestionJob] {app.DisplayName}: {allRawReviews.Count} YENİ yorum işlendi.");
+        _logger.LogInformation("{AppName}: {Count} YENİ yorum işlendi", app.DisplayName, allRawReviews.Count);
 
         DailySummaryStats stats = BuildStats(app.DisplayName, allRawReviews);
         SlackMessagePayload payload = DailySummaryMessageBuilder.Build(app.SlackChannel ?? "#store-reviews-test", stats);
