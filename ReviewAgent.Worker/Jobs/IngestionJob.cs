@@ -19,6 +19,7 @@ public class IngestionJob
     private readonly ISlackNotifier _notifier;
     private readonly IReviewProvider _appStoreProvider;
     private readonly IReviewProvider _googlePlayProvider;
+    private readonly IReviewProvider? _liveDemoProvider;
 
     public IngestionJob(
         AppRepository appRepository,
@@ -26,7 +27,8 @@ public class IngestionJob
         SyncStateRepository syncStateRepository,
         ISlackNotifier notifier,
         IReviewProvider appStoreProvider,
-        IReviewProvider googlePlayProvider)
+        IReviewProvider googlePlayProvider,
+        IReviewProvider? liveDemoProvider = null)
     {
         _appRepository = appRepository;
         _reviewRepository = reviewRepository;
@@ -34,6 +36,7 @@ public class IngestionJob
         _notifier = notifier;
         _appStoreProvider = appStoreProvider;
         _googlePlayProvider = googlePlayProvider;
+        _liveDemoProvider = liveDemoProvider;
     }
 
     public async Task RunAsync()
@@ -63,6 +66,12 @@ public class IngestionJob
             .ToList();
 
         List<RawReview> allRawReviews = appStoreReviews.Concat(googlePlayReviews).ToList();
+
+        if (_liveDemoProvider is not null)
+        {
+            List<RawReview> liveReviews = await _liveDemoProvider.FetchReviewsAsync(app.AppKey);
+            allRawReviews.AddRange(liveReviews);
+        }
 
         if (allRawReviews.Count == 0)
         {

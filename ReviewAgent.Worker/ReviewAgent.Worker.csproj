@@ -26,5 +26,6 @@
   <ItemGroup>
     <None Include="..\ReviewAgent.Connectors\MockData\reviews_appstore.json" Link="MockData\reviews_appstore.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\ReviewAgent.Connectors\MockData\reviews_googleplay.json" Link="MockData\reviews_googleplay.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\ReviewAgent.Connectors\MockData\reviews_live_demo.json" Link="MockData\reviews_live_demo.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

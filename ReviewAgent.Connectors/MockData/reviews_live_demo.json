@@ -1,0 +1,5 @@
+[
+  { "templateId": "live-001", "rating": 1, "title": "Uygulama çöküyor", "body": "Az önce güncelledim, açılışta donuyor.", "authorName": "canli_demo_1", "platform": "appstore" },
+  { "templateId": "live-002", "rating": 5, "title": "Harika deneyim", "body": "Yeni tasarım gerçekten çok iyi olmuş.", "authorName": "canli_demo_2", "platform": "googleplay" },
+  { "templateId": "live-003", "rating": 2, "title": "Yavaş açılıyor", "body": "Son güncellemeden sonra açılış süresi uzadı.", "authorName": "canli_demo_3", "platform": "appstore" }
+]

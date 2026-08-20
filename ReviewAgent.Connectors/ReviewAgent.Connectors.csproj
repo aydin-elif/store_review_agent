@@ -15,6 +15,7 @@
   <ItemGroup>
     <None Include="MockData\reviews_appstore.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="MockData\reviews_googleplay.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="MockData\reviews_live_demo.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

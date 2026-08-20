@@ -30,8 +30,10 @@ builder.Services.AddSingleton<IngestionJob>(sp =>
         Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_appstore.json"));
     MockReviewProvider googlePlayProvider = new(
         Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_googleplay.json"));
+    LiveDemoReviewProvider liveDemoProvider = new(
+        Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_live_demo.json"));
 
-    return new IngestionJob(appRepo, reviewRepo, syncStateRepo, notifier, appStoreProvider, googlePlayProvider);
+    return new IngestionJob(appRepo, reviewRepo, syncStateRepo, notifier, appStoreProvider, googlePlayProvider, liveDemoProvider);
 });
 
 builder.Services.AddHangfire(config => config
@@ -55,7 +57,7 @@ IRecurringJobManager recurringJobManager = app.Services.GetRequiredService<IRecu
 recurringJobManager.AddOrUpdate<IngestionJob>(
     "ingestion-job",
     job => job.RunAsync(),
-    "*/5 * * * *");
+    "*/1 * * * *");
 
 app.UseHangfireDashboard("/hangfire");
 
