@@ -2,12 +2,15 @@ using Google.Apis.AndroidPublisher.v3;
 using Google.Apis.AndroidPublisher.v3.Data;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Services;
+using Polly.Retry;
+using ReviewAgent.Connectors.Resilience;
 
 namespace ReviewAgent.Connectors.GooglePlay;
 
 public class GooglePlayReviewProvider : IReviewProvider
 {
     private readonly AndroidPublisherService _service;
+    private readonly AsyncRetryPolicy _retryPolicy;
 
     public GooglePlayReviewProvider(string serviceAccountJsonPath)
     {
@@ -22,15 +25,20 @@ public class GooglePlayReviewProvider : IReviewProvider
             HttpClientInitializer = credential,
             ApplicationName = "StoreReviewIntelligenceAgent"
         });
+
+        _retryPolicy = RetryPolicies.CreateDefaultRetryPolicy(nameof(GooglePlayReviewProvider));
     }
 
     public async Task<List<RawReview>> FetchReviewsAsync(string appIdentifier, CancellationToken ct = default)
     {
-        ReviewsResource.ListRequest request = _service.Reviews.List(appIdentifier);
-        ReviewsListResponse response = await request.ExecuteAsync(ct);
+        return await _retryPolicy.ExecuteAsync(async () =>
+        {
+            ReviewsResource.ListRequest request = _service.Reviews.List(appIdentifier);
+            ReviewsListResponse response = await request.ExecuteAsync(ct);
 
-        return (response.Reviews ?? new List<Review>())
-            .Select(GooglePlayReviewMapper.MapToRawReview)
-            .ToList();
+            return (response.Reviews ?? new List<Review>())
+                .Select(GooglePlayReviewMapper.MapToRawReview)
+                .ToList();
+        });
     }
 }
