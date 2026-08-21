@@ -1,3 +1,5 @@
+using ReviewAgent.AI;
+using ReviewAgent.AI.Models;
 using ReviewAgent.Connectors;
 using ReviewAgent.Data.Models;
 using ReviewAgent.Data.Repositories;
@@ -18,6 +20,7 @@ public class IngestionJob
     private readonly ReviewRepository _reviewRepository;
     private readonly SyncStateRepository _syncStateRepository;
     private readonly ISlackNotifier _notifier;
+    private readonly ISentimentAnalyzer _sentimentAnalyzer;
     private readonly IReviewProvider _appStoreProvider;
     private readonly IReviewProvider _googlePlayProvider;
     private readonly IReviewProvider? _liveDemoProvider;
@@ -28,6 +31,7 @@ public class IngestionJob
         ReviewRepository reviewRepository,
         SyncStateRepository syncStateRepository,
         ISlackNotifier notifier,
+        ISentimentAnalyzer sentimentAnalyzer,
         IReviewProvider appStoreProvider,
         IReviewProvider googlePlayProvider,
         IReviewProvider? liveDemoProvider = null)
@@ -37,6 +41,7 @@ public class IngestionJob
         _reviewRepository = reviewRepository;
         _syncStateRepository = syncStateRepository;
         _notifier = notifier;
+        _sentimentAnalyzer = sentimentAnalyzer;
         _appStoreProvider = appStoreProvider;
         _googlePlayProvider = googlePlayProvider;
         _liveDemoProvider = liveDemoProvider;
@@ -84,7 +89,19 @@ public class IngestionJob
 
         foreach (RawReview raw in allRawReviews)
         {
-            await _reviewRepository.UpsertReviewAsync(MapToReview(raw, app));
+            Review review = MapToReview(raw, app);
+            ReviewAnalysisResult analysis = await _sentimentAnalyzer.AnalyzeAsync(raw.Title, raw.Body, raw.Rating);
+            review.Analysis = new ReviewAnalysis
+            {
+                Sentiment = analysis.Sentiment,
+                Category = analysis.Category,
+                PriorityScore = analysis.PriorityScore,
+                Summary = analysis.Summary,
+                AnalyzedAt = DateTime.UtcNow,
+                ModelVersion = analysis.ModelVersion
+            };
+
+            await _reviewRepository.UpsertReviewAsync(review);
         }
 
         await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "appstore", DateTime.UtcNow);

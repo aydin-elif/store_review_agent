@@ -2,6 +2,8 @@ using Hangfire;
 using Hangfire.Mongo;
 using Hangfire.Mongo.Migration;
 using Hangfire.Mongo.Migration.Strategies;
+using Microsoft.Extensions.Http;
+using ReviewAgent.AI;
 using ReviewAgent.Connectors;
 using ReviewAgent.Data;
 using ReviewAgent.Data.Repositories;
@@ -35,6 +37,21 @@ try
     builder.Services.AddSingleton<SyncStateRepository>();
     builder.Services.AddSingleton<ISlackNotifier, ConsoleSlackNotifier>();
 
+    string? anthropicApiKey = builder.Configuration["Anthropic:ApiKey"];
+    builder.Services.AddHttpClient<AnthropicSentimentAnalyzer>();
+    builder.Services.AddSingleton<ISentimentAnalyzer>(sp =>
+    {
+        if (string.IsNullOrWhiteSpace(anthropicApiKey))
+        {
+            Log.Warning("Anthropic API key bulunamadı, MockSentimentAnalyzer kullanılıyor.");
+            return new MockSentimentAnalyzer();
+        }
+
+        HttpClient httpClient = sp.GetRequiredService<IHttpClientFactory>()
+            .CreateClient(nameof(AnthropicSentimentAnalyzer));
+        return new AnthropicSentimentAnalyzer(httpClient, anthropicApiKey);
+    });
+
     builder.Services.AddSingleton<IngestionJob>(sp =>
     {
         ILogger<IngestionJob> logger = sp.GetRequiredService<ILogger<IngestionJob>>();
@@ -42,13 +59,16 @@ try
         ReviewRepository reviewRepo = sp.GetRequiredService<ReviewRepository>();
         SyncStateRepository syncStateRepo = sp.GetRequiredService<SyncStateRepository>();
         ISlackNotifier notifier = sp.GetRequiredService<ISlackNotifier>();
+        ISentimentAnalyzer sentimentAnalyzer = sp.GetRequiredService<ISentimentAnalyzer>();
 
         MockReviewProvider appStoreProvider = new(
             Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_appstore.json"));
         MockReviewProvider googlePlayProvider = new(
             Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_googleplay.json"));
-        LiveDemoReviewProvider liveDemoProvider = new(
-            Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_live_demo.json"));
+
+        // Canlı demo kapalı. Açmak için aşağıdaki satırları aktif et.
+        // LiveDemoReviewProvider liveDemoProvider = new(
+        //     Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_live_demo.json"));
 
         return new IngestionJob(
             logger,
@@ -56,9 +76,10 @@ try
             reviewRepo,
             syncStateRepo,
             notifier,
+            sentimentAnalyzer,
             appStoreProvider,
             googlePlayProvider,
-            liveDemoProvider);
+            liveDemoProvider: null);
     });
 
     builder.Services.AddHangfire(config => config
@@ -82,7 +103,7 @@ try
     recurringJobManager.AddOrUpdate<IngestionJob>(
         "ingestion-job",
         job => job.RunAsync(),
-        "*/1 * * * *");
+        "*/5 * * * *");
 
     app.UseHangfireDashboard("/hangfire");
 
