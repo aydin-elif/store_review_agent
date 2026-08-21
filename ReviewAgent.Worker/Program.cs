@@ -35,6 +35,7 @@ try
     builder.Services.AddSingleton<AppRepository>();
     builder.Services.AddSingleton<ReviewRepository>();
     builder.Services.AddSingleton<SyncStateRepository>();
+    builder.Services.AddSingleton<AlertLogRepository>();
     builder.Services.AddSingleton<ISlackNotifier, ConsoleSlackNotifier>();
 
     string? anthropicApiKey = builder.Configuration["Anthropic:ApiKey"];
@@ -59,6 +60,7 @@ try
         AppRepository appRepo = sp.GetRequiredService<AppRepository>();
         ReviewRepository reviewRepo = sp.GetRequiredService<ReviewRepository>();
         SyncStateRepository syncStateRepo = sp.GetRequiredService<SyncStateRepository>();
+        AlertLogRepository alertLogRepo = sp.GetRequiredService<AlertLogRepository>();
         ISlackNotifier notifier = sp.GetRequiredService<ISlackNotifier>();
         ISentimentAnalyzer sentimentAnalyzer = sp.GetRequiredService<ISentimentAnalyzer>();
 
@@ -76,6 +78,7 @@ try
             appRepo,
             reviewRepo,
             syncStateRepo,
+            alertLogRepo,
             notifier,
             sentimentAnalyzer,
             appStoreProvider,

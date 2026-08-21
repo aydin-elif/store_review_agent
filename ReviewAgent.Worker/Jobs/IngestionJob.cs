@@ -15,10 +15,13 @@ namespace ReviewAgent.Worker.Jobs;
 /// </summary>
 public class IngestionJob
 {
+    private const int CriticalPriorityThreshold = 4;
+
     private readonly ILogger<IngestionJob> _logger;
     private readonly AppRepository _appRepository;
     private readonly ReviewRepository _reviewRepository;
     private readonly SyncStateRepository _syncStateRepository;
+    private readonly AlertLogRepository _alertLogRepository;
     private readonly ISlackNotifier _notifier;
     private readonly ISentimentAnalyzer _sentimentAnalyzer;
     private readonly IReviewProvider _appStoreProvider;
@@ -30,6 +33,7 @@ public class IngestionJob
         AppRepository appRepository,
         ReviewRepository reviewRepository,
         SyncStateRepository syncStateRepository,
+        AlertLogRepository alertLogRepository,
         ISlackNotifier notifier,
         ISentimentAnalyzer sentimentAnalyzer,
         IReviewProvider appStoreProvider,
@@ -40,6 +44,7 @@ public class IngestionJob
         _appRepository = appRepository;
         _reviewRepository = reviewRepository;
         _syncStateRepository = syncStateRepository;
+        _alertLogRepository = alertLogRepository;
         _notifier = notifier;
         _sentimentAnalyzer = sentimentAnalyzer;
         _appStoreProvider = appStoreProvider;
@@ -105,6 +110,36 @@ public class IngestionJob
 
             await _reviewRepository.UpsertReviewAsync(review);
             analyzedReviews.Add((raw, analysis));
+
+            if (analysis.PriorityScore >= CriticalPriorityThreshold)
+            {
+                bool alreadySent = await _alertLogRepository.WasAlertSentAsync(raw.ExternalReviewId, raw.Platform, app.Id!);
+                if (!alreadySent)
+                {
+                    CriticalAlertInfo alertInfo = new()
+                    {
+                        AppDisplayName = app.DisplayName,
+                        Platform = raw.Platform,
+                        Rating = raw.Rating,
+                        Summary = analysis.Summary,
+                        ReviewUrl = null
+                    };
+
+                    SlackMessagePayload alertPayload = CriticalAlertMessageBuilder.Build(app.SlackChannel ?? "#store-reviews-test", alertInfo);
+                    await _notifier.SendAsync(alertPayload);
+                    await _alertLogRepository.RecordAlertSentAsync(raw.ExternalReviewId, raw.Platform, app.Id!);
+
+                    _logger.LogWarning(
+                        "{AppName}: KRİTİK yorum alert'i gönderildi (öncelik {Priority}) - {Summary}",
+                        app.DisplayName,
+                        analysis.PriorityScore,
+                        analysis.Summary);
+                }
+                else
+                {
+                    _logger.LogInformation("{AppName}: Kritik yorum için alert zaten gönderilmiş, atlanıyor.", app.DisplayName);
+                }
+            }
         }
 
         await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "appstore", DateTime.UtcNow);

@@ -22,6 +22,9 @@ public class MongoDbContext
     public IMongoCollection<SyncState> SyncStates =>
         _database.GetCollection<SyncState>("sync_state");
 
+    public IMongoCollection<AlertLog> AlertLogs =>
+        _database.GetCollection<AlertLog>("alert_log");
+
     public async Task EnsureIndexesAsync()
     {
         IndexKeysDefinition<Review> reviewIndexKeys = Builders<Review>.IndexKeys
@@ -44,5 +47,16 @@ public class MongoDbContext
             new CreateIndexOptions { Unique = true, Name = "uniq_sync_state_per_app_platform" });
 
         await SyncStates.Indexes.CreateOneAsync(syncStateIndexModel);
+
+        IndexKeysDefinition<AlertLog> alertLogIndexKeys = Builders<AlertLog>.IndexKeys
+            .Ascending(a => a.ReviewExternalId)
+            .Ascending(a => a.Platform)
+            .Ascending(a => a.AppId);
+
+        CreateIndexModel<AlertLog> alertLogIndexModel = new(
+            alertLogIndexKeys,
+            new CreateIndexOptions { Unique = true, Name = "uniq_alert_per_review" });
+
+        await AlertLogs.Indexes.CreateOneAsync(alertLogIndexModel);
     }
 }
