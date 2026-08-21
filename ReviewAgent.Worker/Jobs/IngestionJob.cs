@@ -87,6 +87,8 @@ public class IngestionJob
             return;
         }
 
+        List<(RawReview Raw, ReviewAnalysisResult Analysis)> analyzedReviews = [];
+
         foreach (RawReview raw in allRawReviews)
         {
             Review review = MapToReview(raw, app);
@@ -102,6 +104,7 @@ public class IngestionJob
             };
 
             await _reviewRepository.UpsertReviewAsync(review);
+            analyzedReviews.Add((raw, analysis));
         }
 
         await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "appstore", DateTime.UtcNow);
@@ -109,7 +112,7 @@ public class IngestionJob
 
         _logger.LogInformation("{AppName}: {Count} YENİ yorum işlendi", app.DisplayName, allRawReviews.Count);
 
-        DailySummaryStats stats = BuildStats(app.DisplayName, allRawReviews);
+        DailySummaryStats stats = BuildStats(app.DisplayName, analyzedReviews);
         SlackMessagePayload payload = DailySummaryMessageBuilder.Build(app.SlackChannel ?? "#store-reviews-test", stats);
         await _notifier.SendAsync(payload);
     }
@@ -127,36 +130,40 @@ public class IngestionJob
         ReviewDate = raw.ReviewDate
     };
 
-    private static DailySummaryStats BuildStats(string appDisplayName, List<RawReview> reviews)
+    private static DailySummaryStats BuildStats(
+        string appDisplayName,
+        List<(RawReview Raw, ReviewAnalysisResult Analysis)> analyzedReviews)
     {
-        int positive = reviews.Count(r => r.Rating >= 4);
-        int negative = reviews.Count(r => r.Rating <= 2);
-        int neutral = reviews.Count - positive - negative;
+        int positive = analyzedReviews.Count(x => x.Analysis.Sentiment == "positive");
+        int negative = analyzedReviews.Count(x => x.Analysis.Sentiment == "negative");
+        int neutral = analyzedReviews.Count - positive - negative;
 
-        List<TopReview> topPriority = reviews
-            .Where(r => r.Rating <= 2)
-            .OrderBy(r => r.Rating)
+        string topCategory = analyzedReviews
+            .GroupBy(x => x.Analysis.Category)
+            .OrderByDescending(g => g.Count())
+            .Select(g => g.Key)
+            .FirstOrDefault() ?? "other";
+
+        List<TopReview> topPriority = analyzedReviews
+            .OrderByDescending(x => x.Analysis.PriorityScore)
             .Take(5)
-            .Select(r => new TopReview
+            .Select(x => new TopReview
             {
-                Rating = r.Rating,
-                Summary = string.IsNullOrWhiteSpace(r.Title) ? Truncate(r.Body, 60) : r.Title,
-                PriorityScore = r.Rating == 1 ? 5 : 3
+                Rating = x.Raw.Rating,
+                Summary = x.Analysis.Summary,
+                PriorityScore = x.Analysis.PriorityScore
             })
             .ToList();
 
         return new DailySummaryStats
         {
             AppDisplayName = appDisplayName,
-            TotalReviews = reviews.Count,
+            TotalReviews = analyzedReviews.Count,
             PositiveCount = positive,
             NegativeCount = negative,
             NeutralCount = neutral,
-            TopCategory = "bug",
+            TopCategory = topCategory,
             TopPriorityReviews = topPriority
         };
     }
-
-    private static string Truncate(string text, int maxLength) =>
-        text.Length <= maxLength ? text : text[..maxLength] + "...";
 }
