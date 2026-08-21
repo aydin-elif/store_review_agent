@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.Extensions.Logging;
 using Polly.Retry;
 using ReviewAgent.Connectors.Resilience;
 
@@ -11,11 +12,11 @@ public class AppStoreReviewProvider : IReviewProvider
     private readonly AppStoreJwtGenerator _jwtGenerator;
     private readonly AsyncRetryPolicy _retryPolicy;
 
-    public AppStoreReviewProvider(HttpClient httpClient, AppStoreJwtGenerator jwtGenerator)
+    public AppStoreReviewProvider(HttpClient httpClient, AppStoreJwtGenerator jwtGenerator, ILogger<AppStoreReviewProvider>? logger = null)
     {
         _httpClient = httpClient;
         _jwtGenerator = jwtGenerator;
-        _retryPolicy = RetryPolicies.CreateDefaultRetryPolicy(nameof(AppStoreReviewProvider));
+        _retryPolicy = RetryPolicies.CreateDefaultRetryPolicy(nameof(AppStoreReviewProvider), logger);
     }
 
     public async Task<List<RawReview>> FetchReviewsAsync(string appIdentifier, CancellationToken ct = default)

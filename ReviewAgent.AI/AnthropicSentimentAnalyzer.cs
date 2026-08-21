@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 using ReviewAgent.AI.Models;
@@ -14,7 +15,7 @@ public class AnthropicSentimentAnalyzer : ISentimentAnalyzer
     private readonly HttpClient _httpClient;
     private readonly AsyncRetryPolicy _retryPolicy;
 
-    public AnthropicSentimentAnalyzer(HttpClient httpClient, string apiKey)
+    public AnthropicSentimentAnalyzer(HttpClient httpClient, string apiKey, ILogger<AnthropicSentimentAnalyzer>? logger = null)
     {
         _httpClient = httpClient;
         _httpClient.BaseAddress = new Uri("https://api.anthropic.com/");
@@ -24,7 +25,27 @@ public class AnthropicSentimentAnalyzer : ISentimentAnalyzer
         _retryPolicy = Policy
             .Handle<HttpRequestException>()
             .Or<TaskCanceledException>()
-            .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+            .WaitAndRetryAsync(
+                retryCount: 3,
+                sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
+                onRetry: (exception, delay, attempt, _) =>
+                {
+                    if (logger is not null)
+                    {
+                        logger.LogWarning(
+                            "[{ProviderName}] Deneme {Attempt} başarısız ({ExceptionType}: {ExceptionMessage}), {Delay}sn sonra tekrar denenecek.",
+                            nameof(AnthropicSentimentAnalyzer),
+                            attempt,
+                            exception.GetType().Name,
+                            exception.Message,
+                            delay.TotalSeconds);
+                    }
+                    else
+                    {
+                        Console.WriteLine(
+                            $"[{nameof(AnthropicSentimentAnalyzer)}] Deneme {attempt} başarısız ({exception.GetType().Name}: {exception.Message}), {delay.TotalSeconds}sn sonra tekrar denenecek.");
+                    }
+                });
     }
 
     public async Task<ReviewAnalysisResult> AnalyzeAsync(

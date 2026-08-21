@@ -49,7 +49,8 @@ try
 
         HttpClient httpClient = sp.GetRequiredService<IHttpClientFactory>()
             .CreateClient(nameof(AnthropicSentimentAnalyzer));
-        return new AnthropicSentimentAnalyzer(httpClient, anthropicApiKey);
+        ILogger<AnthropicSentimentAnalyzer> logger = sp.GetRequiredService<ILogger<AnthropicSentimentAnalyzer>>();
+        return new AnthropicSentimentAnalyzer(httpClient, anthropicApiKey, logger);
     });
 
     builder.Services.AddSingleton<IngestionJob>(sp =>

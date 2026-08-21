@@ -2,6 +2,7 @@ using Google.Apis.AndroidPublisher.v3;
 using Google.Apis.AndroidPublisher.v3.Data;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Services;
+using Microsoft.Extensions.Logging;
 using Polly.Retry;
 using ReviewAgent.Connectors.Resilience;
 
@@ -12,7 +13,7 @@ public class GooglePlayReviewProvider : IReviewProvider
     private readonly AndroidPublisherService _service;
     private readonly AsyncRetryPolicy _retryPolicy;
 
-    public GooglePlayReviewProvider(string serviceAccountJsonPath)
+    public GooglePlayReviewProvider(string serviceAccountJsonPath, ILogger<GooglePlayReviewProvider>? logger = null)
     {
 #pragma warning disable CS0618 // GoogleCredential.FromFile deprecated; CredentialFactory henuz stabil degil, gercek key gelince tekrar degerlendirilecek.
         GoogleCredential credential = GoogleCredential
@@ -26,7 +27,7 @@ public class GooglePlayReviewProvider : IReviewProvider
             ApplicationName = "StoreReviewIntelligenceAgent"
         });
 
-        _retryPolicy = RetryPolicies.CreateDefaultRetryPolicy(nameof(GooglePlayReviewProvider));
+        _retryPolicy = RetryPolicies.CreateDefaultRetryPolicy(nameof(GooglePlayReviewProvider), logger);
     }
 
     public async Task<List<RawReview>> FetchReviewsAsync(string appIdentifier, CancellationToken ct = default)

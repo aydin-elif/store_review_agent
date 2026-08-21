@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Polly;
 using Polly.Retry;
 
@@ -9,7 +10,7 @@ public static class RetryPolicies
     /// Geçici hatalarda (ağ sorunu, 5xx, rate limit) üstel bekleme ile
     /// 3 kez yeniden dener: 2sn, 4sn, 8sn.
     /// </summary>
-    public static AsyncRetryPolicy CreateDefaultRetryPolicy(string providerName)
+    public static AsyncRetryPolicy CreateDefaultRetryPolicy(string providerName, ILogger? logger = null)
     {
         return Policy
             .Handle<HttpRequestException>()
@@ -19,8 +20,21 @@ public static class RetryPolicies
                 sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
                 onRetry: (exception, delay, attempt, _) =>
                 {
-                    Console.WriteLine(
-                        $"[{providerName}] Deneme {attempt} başarısız ({exception.GetType().Name}: {exception.Message}), {delay.TotalSeconds}sn sonra tekrar denenecek.");
+                    if (logger is not null)
+                    {
+                        logger.LogWarning(
+                            "[{ProviderName}] Deneme {Attempt} başarısız ({ExceptionType}: {ExceptionMessage}), {Delay}sn sonra tekrar denenecek.",
+                            providerName,
+                            attempt,
+                            exception.GetType().Name,
+                            exception.Message,
+                            delay.TotalSeconds);
+                    }
+                    else
+                    {
+                        Console.WriteLine(
+                            $"[{providerName}] Deneme {attempt} başarısız ({exception.GetType().Name}: {exception.Message}), {delay.TotalSeconds}sn sonra tekrar denenecek.");
+                    }
                 });
     }
 }
