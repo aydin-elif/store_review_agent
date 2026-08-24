@@ -36,7 +36,20 @@ try
     builder.Services.AddSingleton<ReviewRepository>();
     builder.Services.AddSingleton<SyncStateRepository>();
     builder.Services.AddSingleton<AlertLogRepository>();
-    builder.Services.AddSingleton<ISlackNotifier, ConsoleSlackNotifier>();
+    string? slackBotToken = builder.Configuration["Slack:BotToken"];
+    builder.Services.AddHttpClient<SlackApiNotifier>();
+    builder.Services.AddSingleton<ISlackNotifier>(sp =>
+    {
+        if (string.IsNullOrWhiteSpace(slackBotToken))
+        {
+            Log.Warning("Slack bot token bulunamadı, ConsoleSlackNotifier kullanılıyor.");
+            return new ConsoleSlackNotifier();
+        }
+
+        HttpClient httpClient = sp.GetRequiredService<IHttpClientFactory>()
+            .CreateClient(nameof(SlackApiNotifier));
+        return new SlackApiNotifier(httpClient, slackBotToken);
+    });
 
     string? anthropicApiKey = builder.Configuration["Anthropic:ApiKey"];
     builder.Services.AddHttpClient<AnthropicSentimentAnalyzer>();

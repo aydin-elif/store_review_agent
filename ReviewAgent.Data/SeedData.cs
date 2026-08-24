@@ -15,7 +15,8 @@ public static class SeedData
                 DisplayName = "Bithero (Test)",
                 AppStore = new AppStoreConfig { BundleId = "com.btcturk.bithero" },
                 GooglePlay = new GooglePlayConfig { PackageName = "com.btcturk.bithero" },
-                SlackChannel = "#store-reviews-test",
+                // tmp-dev-project-messages kanalının ID'si.
+                SlackChannel = "C0BRT0FG831",
                 IsActive = true
             },
             new()
