@@ -225,7 +225,7 @@ MongoDB'deki dört koleksiyon:
 - **`apps`** — kayıtlı uygulamalar (isim, mağaza credential referansları, Slack kanalı, aktiflik durumu)
 - **`reviews`** — ham yorum + AI analiz sonucu (tek doküman, denormalize). `externalReviewId + platform + appId` üzerinde unique index (idempotency garantisi)
 - **`sync_state`** — her (uygulama, platform) çifti için son senkronizasyon zamanı; incremental ingestion'ı sağlar
-- **`alert_log`** — *(planlanan, henüz implemente edilmedi)* kritik uyarı tekrarını önlemek için
+- **`alert_log`** — kritik öncelikli (skor ≥ 4) yorumlar için gönderilen anlık uyarıları kaydeder, aynı yorum için tekrar bildirim gitmesini engeller
 
 Hangfire kendi verilerini ayrı bir veritabanında (`review_agent_hangfire`) tutar.
 
@@ -234,8 +234,6 @@ Hangfire kendi verilerini ayrı bir veritabanında (`review_agent_hangfire`) tut
 ## Bilinen Teknik Borçlar
 
 - **`GoogleCredential.FromFile` deprecated uyarısı** (`GooglePlayReviewProvider.cs`): Google'ın önerdiği `CredentialFactory` yöntemi, kullanılan paket sürümünde henüz stabil olmadığı için ertelendi. `#pragma warning disable CS0618` ile bilinçli olarak işaretlendi. Gerçek Google Play credential'ları entegre edilirken tekrar değerlendirilecek.
-- **Statik mock veri seti (60 kayıt) AI ile analiz edilmemiş durumda** (`analysis: null`): AI katmanı bağlanmadan önce `sync_state` tarafından "işlendi" olarak işaretlendikleri için bir daha işlenmiyorlar. Gerekirse geriye dönük bir backfill script'i yazılabilir.
-- **`alert_log` koleksiyonu henüz yok**: Kritik yorum uyarılarının tekrar gönderilmesini önleyecek mekanizma tasarlandı ama implemente edilmedi.
 - **Slack entegrasyonu mock (`ConsoleSlackNotifier`)**: Gerçek Slack bot token'ı geldiğinde `chat.postMessage` API'sine istek atan bir implementasyon yazılacak; mesaj formatı (Block Kit) zaten hazır ve görsel olarak doğrulanmış durumda.
 
 ---
@@ -248,15 +246,16 @@ Hangfire kendi verilerini ayrı bir veritabanında (`review_agent_hangfire`) tut
 | Docker + MongoDB | ✅ Tamamlandı |
 | App Store Connect connector | ✅ Kod hazır, gerçek credential bekleniyor |
 | Google Play connector | ✅ Kod hazır, gerçek credential bekleniyor |
-| MongoDB veri katmanı (apps/reviews/sync_state) | ✅ Tamamlandı, idempotency doğrulandı |
+| MongoDB veri katmanı (apps/reviews/sync_state/alert_log) | ✅ Tamamlandı, idempotency doğrulandı |
 | AI analiz (Claude Sonnet 4.6) | ✅ Tamamlandı ve gerçek veriyle doğrulandı |
+| Mock veri setinin geriye dönük AI analizi (backfill) | ✅ Tamamlandı (60/60 kayıt) |
 | Slack mesaj formatlama | ✅ Tamamlandı, görsel doğrulandı (mock notifier ile) |
+| Kritik alert mekanizması (`alert_log`) | ✅ Tamamlandı, tekrar gönderim engelleniyor |
 | Hangfire zamanlama + dashboard | ✅ Tamamlandı |
 | Polly retry/backoff | ✅ Tamamlandı |
 | Serilog loglama | ✅ Tamamlandı |
 | Gerçek Slack bildirimi | ⏳ Token bekleniyor |
 | Gerçek App Store/Google Play verisi | ⏳ Bithero credential'ları bekleniyor |
-| Kritik alert mekanizması (`alert_log`) | ⏳ Planlandı, yapılmadı |
 
 ---
 
