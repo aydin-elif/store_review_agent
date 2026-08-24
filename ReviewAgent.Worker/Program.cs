@@ -86,6 +86,8 @@ try
             liveDemoProvider: null);
     });
 
+    builder.Services.AddSingleton<BackfillAnalysisJob>();
+
     builder.Services.AddHangfire(config => config
         .UseMongoStorage(connectionString, "review_agent_hangfire", new MongoStorageOptions
         {
@@ -108,6 +110,10 @@ try
         "ingestion-job",
         job => job.RunAsync(),
         "*/5 * * * *");
+
+    // GEÇİCİ: Backfill'i bir kerelik çalıştırmak için satırı aç, çalıştırdıktan sonra tekrar kapat.
+    // BackfillAnalysisJob backfillJob = app.Services.GetRequiredService<BackfillAnalysisJob>();
+    // await backfillJob.RunAsync();
 
     app.UseHangfireDashboard("/hangfire");
 

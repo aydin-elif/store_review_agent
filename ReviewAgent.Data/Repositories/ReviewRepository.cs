@@ -27,4 +27,17 @@ public class ReviewRepository
 
         await _reviews.ReplaceOneAsync(filter, review, new ReplaceOptions { IsUpsert = true }, ct);
     }
+
+    public async Task<List<Review>> GetUnanalyzedReviewsAsync(CancellationToken ct = default)
+    {
+        FilterDefinition<Review> filter = Builders<Review>.Filter.Eq(r => r.Analysis, null);
+        return await _reviews.Find(filter).ToListAsync(ct);
+    }
+
+    public async Task UpdateAnalysisAsync(string reviewId, ReviewAnalysis analysis, CancellationToken ct = default)
+    {
+        FilterDefinition<Review> filter = Builders<Review>.Filter.Eq(r => r.Id, reviewId);
+        UpdateDefinition<Review> update = Builders<Review>.Update.Set(r => r.Analysis, analysis);
+        await _reviews.UpdateOneAsync(filter, update, cancellationToken: ct);
+    }
 }
