@@ -16,6 +16,7 @@ namespace ReviewAgent.Worker.Jobs;
 public class IngestionJob
 {
     private const int CriticalPriorityThreshold = 4;
+    private const int MaxReviewsPerRun = 50;
 
     private readonly ILogger<IngestionJob> _logger;
     private readonly AppRepository _appRepository;
@@ -92,10 +93,22 @@ public class IngestionJob
             return;
         }
 
+        (List<RawReview> reviewsToProcess, bool wasLimited) = ReviewBatchLimiter.Limit(allRawReviews, MaxReviewsPerRun);
+
+        if (wasLimited)
+        {
+            _logger.LogWarning(
+                "{AppName}: {Total} yorum bulundu, tur başına limit ({Limit}) nedeniyle {Processing} tanesi işlenecek, kalanı sıradaki tura bırakılıyor",
+                app.DisplayName,
+                allRawReviews.Count,
+                MaxReviewsPerRun,
+                reviewsToProcess.Count);
+        }
+
         List<(RawReview Raw, ReviewAnalysisResult Analysis)> analyzedReviews = [];
         int failedCount = 0;
 
-        foreach (RawReview raw in allRawReviews)
+        foreach (RawReview raw in reviewsToProcess)
         {
             try
             {
@@ -130,9 +143,9 @@ public class IngestionJob
             }
         }
 
-        // Sync_state denenen tüm yorumlar için güncellenir (başarısız olanlar dahil).
-        await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "appstore", DateTime.UtcNow);
-        await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "googleplay", DateTime.UtcNow);
+        DateTime newSyncPoint = reviewsToProcess.Max(r => r.ReviewDate);
+        await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "appstore", newSyncPoint);
+        await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "googleplay", newSyncPoint);
 
         if (failedCount > 0)
         {
