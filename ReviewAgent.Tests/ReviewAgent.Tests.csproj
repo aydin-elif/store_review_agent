@@ -25,6 +25,7 @@
     <ProjectReference Include="..\ReviewAgent.AI\ReviewAgent.AI.csproj" />
     <ProjectReference Include="..\ReviewAgent.Data\ReviewAgent.Data.csproj" />
     <ProjectReference Include="..\ReviewAgent.Slack\ReviewAgent.Slack.csproj" />
+    <ProjectReference Include="..\ReviewAgent.Worker\ReviewAgent.Worker.csproj" />
   </ItemGroup>
 
   <ItemGroup>

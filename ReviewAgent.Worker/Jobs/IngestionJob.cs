@@ -147,7 +147,7 @@ public class IngestionJob
 
         _logger.LogInformation("{AppName}: {Count} YENİ yorum işlendi", app.DisplayName, allRawReviews.Count);
 
-        DailySummaryStats stats = BuildStats(app.DisplayName, analyzedReviews);
+        DailySummaryStats stats = IngestionStatsCalculator.BuildStats(app.DisplayName, analyzedReviews);
         SlackMessagePayload payload = DailySummaryMessageBuilder.Build(app.SlackChannel ?? "#store-reviews-test", stats);
         await _notifier.SendAsync(payload);
     }
@@ -164,41 +164,4 @@ public class IngestionJob
         AuthorName = raw.AuthorName,
         ReviewDate = raw.ReviewDate
     };
-
-    private static DailySummaryStats BuildStats(
-        string appDisplayName,
-        List<(RawReview Raw, ReviewAnalysisResult Analysis)> analyzedReviews)
-    {
-        int positive = analyzedReviews.Count(x => x.Analysis.Sentiment == "positive");
-        int negative = analyzedReviews.Count(x => x.Analysis.Sentiment == "negative");
-        int neutral = analyzedReviews.Count - positive - negative;
-
-        string topCategory = analyzedReviews
-            .GroupBy(x => x.Analysis.Category)
-            .OrderByDescending(g => g.Count())
-            .Select(g => g.Key)
-            .FirstOrDefault() ?? "other";
-
-        List<TopReview> topPriority = analyzedReviews
-            .OrderByDescending(x => x.Analysis.PriorityScore)
-            .Take(5)
-            .Select(x => new TopReview
-            {
-                Rating = x.Raw.Rating,
-                Summary = x.Analysis.Summary,
-                PriorityScore = x.Analysis.PriorityScore
-            })
-            .ToList();
-
-        return new DailySummaryStats
-        {
-            AppDisplayName = appDisplayName,
-            TotalReviews = analyzedReviews.Count,
-            PositiveCount = positive,
-            NegativeCount = negative,
-            NeutralCount = neutral,
-            TopCategory = topCategory,
-            TopPriorityReviews = topPriority
-        };
-    }
 }
