@@ -93,63 +93,96 @@ public class IngestionJob
         }
 
         List<(RawReview Raw, ReviewAnalysisResult Analysis)> analyzedReviews = [];
+        int failedCount = 0;
 
         foreach (RawReview raw in allRawReviews)
         {
-            Review review = MapToReview(raw, app);
-            ReviewAnalysisResult analysis = await _sentimentAnalyzer.AnalyzeAsync(raw.Title, raw.Body, raw.Rating);
-            review.Analysis = new ReviewAnalysis
+            try
             {
-                Sentiment = analysis.Sentiment,
-                Category = analysis.Category,
-                PriorityScore = analysis.PriorityScore,
-                Summary = analysis.Summary,
-                AnalyzedAt = DateTime.UtcNow,
-                ModelVersion = analysis.ModelVersion
-            };
+                Review review = MapToReview(raw, app);
+                ReviewAnalysisResult analysis = await _sentimentAnalyzer.AnalyzeAsync(raw.Title, raw.Body, raw.Rating);
+                review.Analysis = new ReviewAnalysis
+                {
+                    Sentiment = analysis.Sentiment,
+                    Category = analysis.Category,
+                    PriorityScore = analysis.PriorityScore,
+                    Summary = analysis.Summary,
+                    AnalyzedAt = DateTime.UtcNow,
+                    ModelVersion = analysis.ModelVersion
+                };
 
-            await _reviewRepository.UpsertReviewAsync(review);
-            analyzedReviews.Add((raw, analysis));
+                await _reviewRepository.UpsertReviewAsync(review);
+                analyzedReviews.Add((raw, analysis));
 
-            if (analysis.PriorityScore >= CriticalPriorityThreshold)
+                if (analysis.PriorityScore >= CriticalPriorityThreshold)
+                {
+                    await HandleCriticalAlertAsync(app, raw, analysis);
+                }
+            }
+            catch (Exception ex)
             {
-                bool alreadySent = await _alertLogRepository.WasAlertSentAsync(raw.ExternalReviewId, raw.Platform, app.Id!);
-                if (!alreadySent)
-                {
-                    CriticalAlertInfo alertInfo = new()
-                    {
-                        AppDisplayName = app.DisplayName,
-                        Platform = raw.Platform,
-                        Rating = raw.Rating,
-                        Summary = analysis.Summary,
-                        ReviewUrl = null
-                    };
-
-                    SlackMessagePayload alertPayload = CriticalAlertMessageBuilder.Build(app.SlackChannel ?? "#store-reviews-test", alertInfo);
-                    await _notifier.SendAsync(alertPayload);
-                    await _alertLogRepository.RecordAlertSentAsync(raw.ExternalReviewId, raw.Platform, app.Id!);
-
-                    _logger.LogWarning(
-                        "{AppName}: KRİTİK yorum alert'i gönderildi (öncelik {Priority}) - {Summary}",
-                        app.DisplayName,
-                        analysis.PriorityScore,
-                        analysis.Summary);
-                }
-                else
-                {
-                    _logger.LogInformation("{AppName}: Kritik yorum için alert zaten gönderilmiş, atlanıyor.", app.DisplayName);
-                }
+                failedCount++;
+                _logger.LogError(
+                    ex,
+                    "{AppName}: Yorum işlenirken hata oluştu (ExternalReviewId: {ReviewId}), atlanıyor",
+                    app.DisplayName,
+                    raw.ExternalReviewId);
             }
         }
 
+        // Sync_state denenen tüm yorumlar için güncellenir (başarısız olanlar dahil).
         await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "appstore", DateTime.UtcNow);
         await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "googleplay", DateTime.UtcNow);
 
-        _logger.LogInformation("{AppName}: {Count} YENİ yorum işlendi", app.DisplayName, allRawReviews.Count);
+        if (failedCount > 0)
+        {
+            _logger.LogWarning(
+                "{AppName}: {Failed} yorum analiz edilemedi, {Success} başarılı",
+                app.DisplayName,
+                failedCount,
+                analyzedReviews.Count);
+        }
+
+        if (analyzedReviews.Count == 0)
+        {
+            _logger.LogWarning("{AppName}: Hiçbir yorum başarıyla işlenemedi, özet gönderilmiyor", app.DisplayName);
+            return;
+        }
+
+        _logger.LogInformation("{AppName}: {Count} YENİ yorum işlendi", app.DisplayName, analyzedReviews.Count);
 
         DailySummaryStats stats = IngestionStatsCalculator.BuildStats(app.DisplayName, analyzedReviews);
         SlackMessagePayload payload = DailySummaryMessageBuilder.Build(app.SlackChannel ?? "#store-reviews-test", stats);
         await _notifier.SendAsync(payload);
+    }
+
+    private async Task HandleCriticalAlertAsync(AppRegistration app, RawReview raw, ReviewAnalysisResult analysis)
+    {
+        bool alreadySent = await _alertLogRepository.WasAlertSentAsync(raw.ExternalReviewId, raw.Platform, app.Id!);
+        if (alreadySent)
+        {
+            _logger.LogInformation("{AppName}: Kritik yorum için alert zaten gönderilmiş, atlanıyor.", app.DisplayName);
+            return;
+        }
+
+        CriticalAlertInfo alertInfo = new()
+        {
+            AppDisplayName = app.DisplayName,
+            Platform = raw.Platform,
+            Rating = raw.Rating,
+            Summary = analysis.Summary,
+            ReviewUrl = null
+        };
+
+        SlackMessagePayload alertPayload = CriticalAlertMessageBuilder.Build(app.SlackChannel ?? "#store-reviews-test", alertInfo);
+        await _notifier.SendAsync(alertPayload);
+        await _alertLogRepository.RecordAlertSentAsync(raw.ExternalReviewId, raw.Platform, app.Id!);
+
+        _logger.LogWarning(
+            "{AppName}: KRİTİK yorum alert'i gönderildi (öncelik {Priority}) - {Summary}",
+            app.DisplayName,
+            analysis.PriorityScore,
+            analysis.Summary);
     }
 
     private static Review MapToReview(RawReview raw, AppRegistration app) => new()
