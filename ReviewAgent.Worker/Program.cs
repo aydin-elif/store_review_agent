@@ -2,7 +2,9 @@ using Hangfire;
 using Hangfire.Mongo;
 using Hangfire.Mongo.Migration;
 using Hangfire.Mongo.Migration.Strategies;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Http;
+using MongoDB.Driver;
 using ReviewAgent.AI;
 using ReviewAgent.Connectors;
 using ReviewAgent.Data;
@@ -10,6 +12,7 @@ using ReviewAgent.Data.Repositories;
 using ReviewAgent.Slack;
 using ReviewAgent.Worker.Jobs;
 using Serilog;
+using System.Text.Json;
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
@@ -32,6 +35,12 @@ try
     const string databaseName = "review_agent";
 
     builder.Services.AddSingleton(new MongoDbContext(connectionString, databaseName));
+    builder.Services.AddSingleton(new MongoClient(connectionString));
+    builder.Services.AddHealthChecks()
+        .AddMongoDb(
+            databaseNameFactory: _ => databaseName,
+            name: "mongodb",
+            timeout: TimeSpan.FromSeconds(5));
     builder.Services.AddSingleton<AppRepository>();
     builder.Services.AddSingleton<ReviewRepository>();
     builder.Services.AddSingleton<SyncStateRepository>();
@@ -135,6 +144,24 @@ try
     // await backfillJob.RunAsync();
 
     app.UseHangfireDashboard("/hangfire");
+    app.MapHealthChecks("/health", new HealthCheckOptions
+    {
+        ResponseWriter = async (context, report) =>
+        {
+            context.Response.ContentType = "application/json";
+            string result = JsonSerializer.Serialize(new
+            {
+                status = report.Status.ToString(),
+                checks = report.Entries.Select(e => new
+                {
+                    name = e.Key,
+                    status = e.Value.Status.ToString(),
+                    description = e.Value.Description
+                })
+            });
+            await context.Response.WriteAsync(result);
+        }
+    });
 
     app.Run();
 }
