@@ -12,6 +12,11 @@ public static class AnalysisPrompt
           "priority_score": 1-5 (5 = acil müdahale gerekir, örn. çökme/veri kaybı/güvenlik şikayeti),
           "summary": "yorumun tek cümlelik özeti"
         }
+
+        ÖNEMLİ: Yorum hangi dilde yazılmış olursa olsun (Türkçe, İngilizce, Arapça, veya başka bir dil),
+        "summary" alanını HER ZAMAN Türkçe yaz. Bu özet, Türkçe konuşan bir ekip tarafından
+        Slack üzerinden okunacaktır. sentiment/category/priority_score alanları değişmez,
+        sadece summary metninin dili sabit Türkçe olmalı.
         """;
 
     public static string BuildUserPrompt(string title, string body, int rating)
