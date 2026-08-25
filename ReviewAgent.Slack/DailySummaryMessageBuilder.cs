@@ -4,14 +4,14 @@ namespace ReviewAgent.Slack;
 
 public static class DailySummaryMessageBuilder
 {
-    public static SlackMessagePayload Build(string channel, DailySummaryStats stats)
+    public static SlackMessagePayload Build(string channel, DailySummaryStats stats, string periodLabel = "Günlük")
     {
         List<object> blocks =
         [
             new
             {
                 type = "header",
-                text = new { type = "plain_text", text = $"📊 {stats.AppDisplayName} - Günlük Özet" }
+                text = new { type = "plain_text", text = $"📊 {stats.AppDisplayName} - {periodLabel} Özet" }
             },
             new
             {

@@ -40,4 +40,13 @@ public class ReviewRepository
         UpdateDefinition<Review> update = Builders<Review>.Update.Set(r => r.Analysis, analysis);
         await _reviews.UpdateOneAsync(filter, update, cancellationToken: ct);
     }
+
+    public async Task<List<Review>> GetReviewsSinceAsync(string appId, DateTime since, CancellationToken ct = default)
+    {
+        FilterDefinition<Review> filter = Builders<Review>.Filter.And(
+            Builders<Review>.Filter.Eq(r => r.AppId, appId),
+            Builders<Review>.Filter.Gte(r => r.FetchedAt, since));
+
+        return await _reviews.Find(filter).ToListAsync(ct);
+    }
 }
