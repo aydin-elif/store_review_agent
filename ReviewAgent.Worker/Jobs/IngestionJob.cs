@@ -1,3 +1,4 @@
+using Hangfire;
 using ReviewAgent.AI;
 using ReviewAgent.AI.Models;
 using ReviewAgent.Connectors;
@@ -53,6 +54,7 @@ public class IngestionJob
         _liveDemoProvider = liveDemoProvider;
     }
 
+    [DisableConcurrentExecution(timeoutInSeconds: 300)]
     public async Task RunAsync()
     {
         _logger.LogInformation("Ingestion job başladı");
@@ -69,15 +71,27 @@ public class IngestionJob
 
     private async Task ProcessAppAsync(AppRegistration app)
     {
-        DateTime lastSyncAppStore = await _syncStateRepository.GetLastSyncedAtAsync(app.Id!, "appstore") ?? DateTime.MinValue;
-        DateTime lastSyncGooglePlay = await _syncStateRepository.GetLastSyncedAtAsync(app.Id!, "googleplay") ?? DateTime.MinValue;
+        List<RawReview> appStoreReviews = [];
+        List<RawReview> googlePlayReviews = [];
 
-        List<RawReview> appStoreReviews = (await _appStoreProvider.FetchReviewsAsync(app.AppStore?.AppId ?? app.AppKey))
-            .Where(r => r.ReviewDate > lastSyncAppStore)
-            .ToList();
-        List<RawReview> googlePlayReviews = (await _googlePlayProvider.FetchReviewsAsync(app.GooglePlay?.PackageName ?? app.AppKey))
-            .Where(r => r.ReviewDate > lastSyncGooglePlay)
-            .ToList();
+        if (app.AppStore is not null)
+        {
+            DateTime lastSyncAppStore = await _syncStateRepository.GetLastSyncedAtAsync(app.Id!, "appstore") ?? DateTime.MinValue;
+            string appStoreIdentifier = string.IsNullOrWhiteSpace(app.AppStore.AppId)
+                ? app.AppStore.BundleId
+                : app.AppStore.AppId;
+            appStoreReviews = (await _appStoreProvider.FetchReviewsAsync(appStoreIdentifier))
+                .Where(r => r.ReviewDate > lastSyncAppStore)
+                .ToList();
+        }
+
+        if (app.GooglePlay is not null)
+        {
+            DateTime lastSyncGooglePlay = await _syncStateRepository.GetLastSyncedAtAsync(app.Id!, "googleplay") ?? DateTime.MinValue;
+            googlePlayReviews = (await _googlePlayProvider.FetchReviewsAsync(app.GooglePlay.PackageName))
+                .Where(r => r.ReviewDate > lastSyncGooglePlay)
+                .ToList();
+        }
 
         List<RawReview> allRawReviews = appStoreReviews.Concat(googlePlayReviews).ToList();
 
@@ -144,8 +158,15 @@ public class IngestionJob
         }
 
         DateTime newSyncPoint = reviewsToProcess.Max(r => r.ReviewDate);
-        await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "appstore", newSyncPoint);
-        await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "googleplay", newSyncPoint);
+        if (app.AppStore is not null)
+        {
+            await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "appstore", newSyncPoint);
+        }
+
+        if (app.GooglePlay is not null)
+        {
+            await _syncStateRepository.UpdateLastSyncedAtAsync(app.Id!, "googleplay", newSyncPoint);
+        }
 
         if (failedCount > 0)
         {
@@ -171,10 +192,10 @@ public class IngestionJob
 
     private async Task HandleCriticalAlertAsync(AppRegistration app, RawReview raw, ReviewAnalysisResult analysis)
     {
-        bool alreadySent = await _alertLogRepository.WasAlertSentAsync(raw.ExternalReviewId, raw.Platform, app.Id!);
-        if (alreadySent)
+        bool recorded = await _alertLogRepository.TryRecordAlertSentAsync(raw.ExternalReviewId, raw.Platform, app.Id!);
+        if (!recorded)
         {
-            _logger.LogInformation("{AppName}: Kritik yorum için alert zaten gönderilmiş, atlanıyor.", app.DisplayName);
+            _logger.LogInformation("{AppName}: Kritik yorum için alert zaten gönderilmiş (eşzamanlı çalışma), atlanıyor.", app.DisplayName);
             return;
         }
 
@@ -189,7 +210,6 @@ public class IngestionJob
 
         SlackMessagePayload alertPayload = CriticalAlertMessageBuilder.Build(app.SlackChannel ?? "#store-reviews-test", alertInfo);
         await _notifier.SendAsync(alertPayload);
-        await _alertLogRepository.RecordAlertSentAsync(raw.ExternalReviewId, raw.Platform, app.Id!);
 
         _logger.LogWarning(
             "{AppName}: KRİTİK yorum alert'i gönderildi (öncelik {Priority}) - {Summary}",

@@ -11,30 +11,37 @@ public static class SeedData
         [
             new()
             {
-                AppKey = "bithero",
-                DisplayName = "Bithero (Test)",
-                AppStore = new AppStoreConfig { BundleId = "com.btcturk.bithero" },
-                GooglePlay = new GooglePlayConfig { PackageName = "com.btcturk.bithero" },
-                // tmp-dev-project-messages kanalının ID'si.
+                AppKey = "kripto",
+                DisplayName = "BtcTurk Kripto",
+                AppStore = null,
+                GooglePlay = new GooglePlayConfig
+                {
+                    PackageName = "com.btcturk.pro",
+                    ServiceAccountSecretRef = "secrets/google-play-service-account.json"
+                },
                 SlackChannel = "C0BRT0FG831",
                 IsActive = true
             },
             new()
             {
-                AppKey = "kripto",
-                DisplayName = "BtcTurk Kripto",
-                AppStore = new AppStoreConfig { BundleId = "com.btcturk.kripto" },
-                GooglePlay = new GooglePlayConfig { PackageName = "com.btcturk.kripto" },
-                SlackChannel = "#store-reviews-kripto",
-                IsActive = false
+                AppKey = "hisse",
+                DisplayName = "BtcTurk Hisse",
+                AppStore = null,
+                GooglePlay = new GooglePlayConfig
+                {
+                    PackageName = "com.btcturk.invest",
+                    ServiceAccountSecretRef = "secrets/google-play-service-account.json"
+                },
+                SlackChannel = "C0BRT0FG831",
+                IsActive = true
             },
             new()
             {
-                AppKey = "hisse",
-                DisplayName = "BtcTurk Hisse",
-                AppStore = new AppStoreConfig { BundleId = "com.btcturk.hisse" },
-                GooglePlay = new GooglePlayConfig { PackageName = "com.btcturk.hisse" },
-                SlackChannel = "#store-reviews-hisse",
+                AppKey = "bithero",
+                DisplayName = "Bithero (Test)",
+                AppStore = new AppStoreConfig { BundleId = "com.btcturk.bithero" },
+                GooglePlay = new GooglePlayConfig { PackageName = "com.btcturk.bithero" },
+                SlackChannel = "C0BRT0FG831",
                 IsActive = false
             },
             new()
@@ -43,7 +50,7 @@ public static class SeedData
                 DisplayName = "BtcTurk Global",
                 AppStore = new AppStoreConfig { BundleId = "com.btcturk.global" },
                 GooglePlay = new GooglePlayConfig { PackageName = "com.btcturk.global" },
-                SlackChannel = "#store-reviews-global",
+                SlackChannel = "C0BRT0FG831",
                 IsActive = false
             }
         ];

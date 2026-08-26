@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Store Review Intelligence Agent</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #121b2f;
+      --line: #243049;
+      --text: #eef3fb;
+      --muted: #9aabc4;
+      --accent: #f5a623;
+      --ok: #3dd68c;
+      --wait: #f0c14b;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "Aptos", Arial, sans-serif;
+    }
+    .deck { height: 100%; overflow: hidden; }
+    .slide {
+      display: none;
+      height: 100%;
+      padding: 64px 88px 80px;
+      flex-direction: column;
+      justify-content: center;
+      background:
+        radial-gradient(900px 420px at 110% -10%, rgba(245,166,35,.12), transparent 50%),
+        linear-gradient(180deg, #0b1220 0%, #0e1628 100%);
+    }
+    .slide.active { display: flex; }
+    .kicker {
+      color: var(--accent);
+      letter-spacing: .14em;
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin: 0 0 14px;
+    }
+    h1 { font-size: 56px; line-height: 1.12; margin: 0 0 18px; font-weight: 750; }
+    h2 { font-size: 40px; line-height: 1.15; margin: 0 0 28px; font-weight: 700; }
+    p, li { font-size: 22px; line-height: 1.45; color: var(--text); }
+    .muted { color: var(--muted); }
+    .lead { font-size: 26px; max-width: 920px; color: #d5e0f0; }
+    ul { margin: 0; padding-left: 26px; }
+    li + li { margin-top: 10px; }
+    .row { display: grid; gap: 18px; }
+    .row.two { grid-template-columns: 1fr 1fr; }
+    .row.three { grid-template-columns: 1fr 1fr 1fr; }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 22px 24px;
+    }
+    .card h3 { margin: 0 0 10px; font-size: 20px; color: var(--accent); }
+    .card p, .card li { font-size: 18px; margin: 0; color: #d7e2f1; }
+    .pipe {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-size: 18px;
+    }
+    .chip {
+      background: #18233a;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 16px;
+      white-space: nowrap;
+    }
+    .arrow { color: var(--accent); font-weight: 700; }
+    .status { list-style: none; padding: 0; margin: 0; }
+    .status li {
+      display: flex;
+      gap: 14px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 20px;
+    }
+    .dot { min-width: 92px; font-weight: 700; }
+    .dot.ok { color: var(--ok); }
+    .dot.wait { color: var(--wait); }
+    .footer {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 28px;
+      color: var(--muted);
+      font-size: 14px;
+      background: linear-gradient(180deg, transparent, rgba(11,18,32,.92));
+    }
+    .hint { opacity: .75; }
+    code, .mono { font-family: Consolas, "Cascadia Mono", monospace; }
+  </style>
+</head>
+<body>
+  <div class="deck" id="deck">
+    <section class="slide active">
+      <p class="kicker">BtcTurk · İç sistem</p>
+      <h1>Store Review Intelligence Agent</h1>
+      <p class="lead">Mobil uygulama yorumlarını toplayan, yapay zeka ile analiz eden ve Slack üzerinden raporlayan iç platform.</p>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Neden</p>
+      <h2>Mağaza yorumları dağınık ve geç kalıyor</h2>
+      <div class="row two">
+        <div class="card">
+          <h3>Bugün</h3>
+          <ul>
+            <li>App Store / Google Play ayrı bakılıyor</li>
+            <li>Kritik şikayetler gecikebiliyor</li>
+            <li>Üçüncü parti izleme aracına bağımlılık</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Hedef</h3>
+          <ul>
+            <li>Tek boru hattı: çek → analiz et → bildir</li>
+            <li>Kritik yorumlar anında Slack’e düşsün</li>
+            <li>Yeni uygulama eklemek kod değiştirmesin</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Ne yapıyor</p>
+      <h2>Uçtan uca yorum istihbaratı</h2>
+      <div class="pipe">
+        <span class="chip">Mağaza API</span><span class="arrow">→</span>
+        <span class="chip">Hangfire Worker</span><span class="arrow">→</span>
+        <span class="chip">Claude Sonnet 4.6</span><span class="arrow">→</span>
+        <span class="chip">MongoDB</span><span class="arrow">→</span>
+        <span class="chip">Slack</span>
+      </div>
+      <ul style="margin-top:36px">
+        <li>Sentiment, kategori, öncelik skoru (1–5)</li>
+        <li>Günlük özet + Pazartesi haftalık özet</li>
+        <li>Öncelik ≥ 4 ise anlık kritik alert</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Tasarım</p>
+      <h2>Uygulamalar koda gömülü değil</h2>
+      <p class="lead">Kripto, Hisse, Global, Bithero… hepsi MongoDB <span class="mono">apps</span> koleksiyonunda.</p>
+      <div class="row two" style="margin-top:28px">
+        <div class="card">
+          <h3>Yeni uygulama</h3>
+          <p>Koleksiyona kayıt eklemek yeterli. Kod değişikliği yok.</p>
+        </div>
+        <div class="card">
+          <h3>Aktiflik</h3>
+          <p>Seed’de Bithero aktif; diğerleri kapalı. Gerçek veri gelince aynı hat çalışır.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Mimari</p>
+      <h2>Katmanlar değiştirilebilir</h2>
+      <div class="row three">
+        <div class="card">
+          <h3>Kaynak</h3>
+          <p>IReviewProvider<br>Mock → Demo → App Store / Play</p>
+        </div>
+        <div class="card">
+          <h3>Analiz</h3>
+          <p>ISentimentAnalyzer<br>Mock veya Claude</p>
+        </div>
+        <div class="card">
+          <h3>Bildirim</h3>
+          <p>ISlackNotifier<br>Console veya chat.postMessage</p>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:28px">Anahtar yoksa sistem çökmez, mock’a düşer. AI ve Slack şu an gerçek serviste.</p>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">AI</p>
+      <h2>Her yorum yapılandırılmış analiz</h2>
+      <div class="row two">
+        <div class="card">
+          <h3>Çıktı</h3>
+          <p>sentiment · category · priority_score · summary</p>
+        </div>
+        <div class="card">
+          <h3>Dil kuralı</h3>
+          <p>Yorum EN / AR / TR olsa da Slack özeti her zaman Türkçe.</p>
+        </div>
+      </div>
+      <p style="margin-top:28px" class="muted">Doğrulandı: İngilizce çökme yorumu → negative / bug / 5. Arapça övgü → positive / ux / 1.</p>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Slack</p>
+      <h2>Ekip kanalda görür</h2>
+      <div class="row three">
+        <div class="card"><h3>🚨 Kritik</h3><p>Öncelik ≥ 4. Aynı yorum ikinci kez gitmez (alert_log).</p></div>
+        <div class="card"><h3>📊 Günlük</h3><p>Tur özeti: hacim, duygu, kategori, top 5.</p></div>
+        <div class="card"><h3>📅 Haftalık</h3><p>Pazartesi 09:00, son 7 günün aggregate’i.</p></div>
+      </div>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Dayanıklılık</p>
+      <h2>Gerçek veri geldiğinde güvenlik ağı</h2>
+      <ul>
+        <li>Polly: 3 deneme, 2s / 4s / 8s</li>
+        <li>Bir yorum patlarsa tur kesilmez</li>
+        <li>Tur başına en fazla 50 yorum; kalanı sonraki tura kalır</li>
+        <li>sync_state işlenen son yorumun tarihiyle ilerler — kayıt kaybolmaz</li>
+        <li>/health → MongoDB sağlığı JSON olarak</li>
+      </ul>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Canlı demo</p>
+      <h2>Sunumda nasıl gösterilir</h2>
+      <ol>
+        <li>Program.cs’te LiveDemoReviewProvider’ı aç</li>
+        <li><span class="mono">dotnet run --project ReviewAgent.Worker</span></li>
+        <li>Hangfire: localhost:5000/hangfire → ingestion-job → Şimdi tetikle</li>
+        <li>Slack’te kritik alert + günlük özet</li>
+        <li>Bitince demoyu kapat (her tur 3 Anthropic çağrısı)</li>
+      </ol>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Durum</p>
+      <h2>Neredeyiz</h2>
+      <ul class="status">
+        <li><span class="dot ok">Hazır</span> Worker, Mongo, AI, Slack, Hangfire, health, testler</li>
+        <li><span class="dot ok">Hazır</span> Connector kodu (App Store / Play)</li>
+        <li><span class="dot wait">Bekliyor</span> Bithero store credential’ları</li>
+      </ul>
+      <p class="muted" style="margin-top:28px">Credential gelince DI kaydı değişir. İş mantığı aynı kalır.</p>
+    </section>
+
+    <section class="slide">
+      <p class="kicker">Kapanış</p>
+      <h1>Soru?</h1>
+      <p class="lead">Store Review Intelligence Agent · BtcTurk</p>
+    </section>
+  </div>
+
+  <div class="footer">
+    <span>Store Review Intelligence Agent</span>
+    <span id="counter">1 / 11</span>
+    <span class="hint">← → veya tık · F tam ekran</span>
+  </div>
+
+  <script>
+    const slides = [...document.querySelectorAll(".slide")];
+    const counter = document.getElementById("counter");
+    let i = 0;
+    function show(n) {
+      i = (n + slides.length) % slides.length;
+      slides.forEach((s, idx) => s.classList.toggle("active", idx === i));
+      counter.textContent = (i + 1) + " / " + slides.length;
+    }
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight" || e.key === " " || e.key === "PageDown") { e.preventDefault(); show(i + 1); }
+      if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); show(i - 1); }
+      if (e.key === "Home") show(0);
+      if (e.key === "End") show(slides.length - 1);
+      if (e.key === "f" || e.key === "F") document.documentElement.requestFullscreen?.();
+    });
+    document.getElementById("deck").addEventListener("click", (e) => {
+      show(e.clientX > window.innerWidth / 2 ? i + 1 : i - 1);
+    });
+  </script>
+</body>
+</html>

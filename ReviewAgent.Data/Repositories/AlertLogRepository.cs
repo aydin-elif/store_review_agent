@@ -35,4 +35,24 @@ public class AlertLogRepository
 
         await _alertLogs.InsertOneAsync(alertLog, cancellationToken: ct);
     }
+
+    public async Task<bool> TryRecordAlertSentAsync(string reviewExternalId, string platform, string appId, CancellationToken ct = default)
+    {
+        try
+        {
+            AlertLog alertLog = new()
+            {
+                ReviewExternalId = reviewExternalId,
+                Platform = platform,
+                AppId = appId,
+                SentAt = DateTime.UtcNow
+            };
+            await _alertLogs.InsertOneAsync(alertLog, cancellationToken: ct);
+            return true;
+        }
+        catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            return false;
+        }
+    }
 }

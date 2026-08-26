@@ -7,6 +7,7 @@ using Microsoft.Extensions.Http;
 using MongoDB.Driver;
 using ReviewAgent.AI;
 using ReviewAgent.Connectors;
+using ReviewAgent.Connectors.GooglePlay;
 using ReviewAgent.Data;
 using ReviewAgent.Data.Repositories;
 using ReviewAgent.Slack;
@@ -76,6 +77,9 @@ try
         return new AnthropicSentimentAnalyzer(httpClient, anthropicApiKey, logger);
     });
 
+    string googlePlayServiceAccountPath = Path.GetFullPath(
+        Path.Combine(builder.Environment.ContentRootPath, "..", "secrets", "google-play-service-account.json"));
+
     builder.Services.AddSingleton<IngestionJob>(sp =>
     {
         ILogger<IngestionJob> logger = sp.GetRequiredService<ILogger<IngestionJob>>();
@@ -86,10 +90,21 @@ try
         ISlackNotifier notifier = sp.GetRequiredService<ISlackNotifier>();
         ISentimentAnalyzer sentimentAnalyzer = sp.GetRequiredService<ISentimentAnalyzer>();
 
-        MockReviewProvider appStoreProvider = new(
+        IReviewProvider appStoreProvider = new MockReviewProvider(
             Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_appstore.json"));
-        MockReviewProvider googlePlayProvider = new(
-            Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_googleplay.json"));
+
+        IReviewProvider googlePlayProvider;
+        if (File.Exists(googlePlayServiceAccountPath))
+        {
+            ILogger<GooglePlayReviewProvider> googlePlayLogger = sp.GetRequiredService<ILogger<GooglePlayReviewProvider>>();
+            googlePlayProvider = new GooglePlayReviewProvider(googlePlayServiceAccountPath, googlePlayLogger);
+        }
+        else
+        {
+            Log.Warning("Google Play service account dosyası bulunamadı, MockReviewProvider kullanılıyor.");
+            googlePlayProvider = new MockReviewProvider(
+                Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_googleplay.json"));
+        }
 
         // Canlı demo kapalı. Açmak için aşağıdaki satırları aktif et.
         // LiveDemoReviewProvider liveDemoProvider = new(
