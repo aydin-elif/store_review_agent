@@ -1,13 +1,14 @@
 # Store Review Intelligence Agent
 
-BtcTurk'ün mobil uygulamalarının (Global, Kripto, Hisse ve gelecekte eklenecek diğer uygulamaların) App Store ve Google Play yorumlarını resmi API'ler üzerinden toplayan, yapay zeka ile analiz eden (sentiment, kategori, öncelik skoru) ve sonuçları Slack üzerinden raporlayan iç sistem.
+BtcTurk'ün mobil uygulamalarının Google Play üzerindeki kullanıcı yorumlarını resmi API üzerinden toplayan, yapay zeka ile analiz eden (sentiment, kategori, öncelik skoru) ve sonuçları Slack üzerinden raporlayan iç sistem.
 
-Üçüncü parti bir izleme aracının yerine geçmek üzere geliştirilmiştir.
+Üçüncü parti bir izleme aracının yerine geçmek üzere geliştirilmiş, **Kripto ve Hisse uygulamaları için gerçek verilerle production'da çalışan** bir sistemdir.
 
 ---
 
 ## İçindekiler
 
+- [Kapsam](#kapsam)
 - [Mimari](#mimari)
 - [Teknoloji Stack'i](#teknoloji-stacki)
 - [Proje Yapısı](#proje-yapısı)
@@ -26,12 +27,27 @@ BtcTurk'ün mobil uygulamalarının (Global, Kripto, Hisse ve gelecekte eklenece
 
 ---
 
+## Kapsam
+
+Güvenlik ekibinin kararı doğrultusunda, sistem şu an **yalnızca Android (Google Play)** üzerinden çalışmaktadır — iOS/App Store tarafı, Apple'ın yalnızca "review-okuma" yetkili bir key üretmeye izin vermemesi nedeniyle kapsam dışı bırakılmıştır. Kod tarafında App Store entegrasyonu (`AppStoreReviewProvider`, JWT auth) tamamen hazır ve test edilmiş durumdadır; ileride bu kısıtlama kalkarsa devreye alınması ekstra geliştirme gerektirmez.
+
+**Aktif uygulamalar (production'da gerçek veriyle çalışan):**
+
+| Uygulama | Google Play Paketi | Durum |
+|---|---|---|
+| BtcTurk Kripto | `com.btcturk.pro` | ✅ Aktif |
+| BtcTurk Hisse | `com.btcturk.invest` | ✅ Aktif |
+| Bithero (Test) | — | Pasif (ilk geliştirme/test için kullanıldı) |
+| BtcTurk Global | — | Pasif (henüz credential yok) |
+
+---
+
 ## Mimari
 
 Sistem, beş katmandan oluşan uçtan uca bir veri hattı olarak tasarlanmıştır:
 
 ```
-Veri Kaynakları (App Store Connect API / Google Play Developer API)
+Google Play Developer API  (App Store hazır, kapsam dışı)
         │
         ▼
 .NET Ingestion Servisi (Hangfire ile zamanlanmış — günlük + haftalık)
@@ -48,7 +64,7 @@ Slack Bot (günlük özet + haftalık özet + kritik uyarılar)
 
 ### Temel tasarım prensibi: "SaaS benzeri" dinamik uygulama yönetimi
 
-Uygulamalar (Kripto/Hisse/Global/vb.) koda gömülü sabit değerler **değildir**. MongoDB'deki `apps` koleksiyonunda çalışma zamanında tanımlı kayıtlar olarak tutulur. Yeni bir uygulama eklemek kod değişikliği gerektirmez — yalnızca bu koleksiyona yeni bir kayıt eklenmesi yeterlidir.
+Uygulamalar koda gömülü sabit değerler **değildir**. MongoDB'deki `apps` koleksiyonunda çalışma zamanında tanımlı kayıtlar olarak tutulur; her uygulamanın hangi platformlarda aktif olduğu (`AppStore`/`GooglePlay` alanlarının `null` olup olmaması) da buradan yönetilir. Yeni bir uygulama eklemek veya bir platformu açıp kapatmak kod değişikliği gerektirmez.
 
 ### Provider soyutlaması
 
@@ -59,22 +75,19 @@ IReviewProvider
     │
     ├── MockReviewProvider        → sabit JSON dosyasından okur (test/geliştirme)
     ├── LiveDemoReviewProvider    → her çağrıda taze veri üretir (sunum/demo amaçlı, varsayılan kapalı)
-    ├── AppStoreReviewProvider    → gerçek App Store Connect API
-    └── GooglePlayReviewProvider  → gerçek Google Play Developer API
+    ├── AppStoreReviewProvider    → gerçek App Store Connect API (kod hazır, kapsam dışı)
+    └── GooglePlayReviewProvider  → gerçek Google Play Developer API — AKTİF
 ```
 
-Aynı prensip AI analiz ve Slack bildirim katmanlarında da uygulanmıştır:
+Aynı prensip AI analiz ve Slack bildirim katmanlarında da uygulanmıştır ve **ikisi de gerçek servislere bağlıdır**:
 
 ```
 ISentimentAnalyzer                          ISlackNotifier
     │                                            │
-    ├── MockSentimentAnalyzer                    ├── ConsoleSlackNotifier (mock, geliştirme)
-    │   (rating bazlı kaba tahmin, maliyetsiz)   │
-    └── AnthropicSentimentAnalyzer               └── SlackApiNotifier
-        (gerçek Claude Sonnet 4.6 API çağrısı)       (gerçek Slack chat.postMessage — AKTİF)
+    ├── MockSentimentAnalyzer                    ├── ConsoleSlackNotifier (yedek, key yoksa)
+    │   (yedek, key yoksa devreye girer)         │
+    └── AnthropicSentimentAnalyzer  ← AKTİF      └── SlackApiNotifier  ← AKTİF
 ```
-
-Bu sayede gerçek API anahtarları olmadan da sistemin tamamı uçtan uca test edilebilir; anahtarlar geldiğinde yalnızca dependency injection kaydı değişir, iş mantığı aynı kalır. **AI ve Slack entegrasyonları artık gerçek servislere bağlıdır**, yalnızca App Store/Google Play tarafı mock veriyle çalışmaktadır (bkz. [Proje Durumu](#proje-durumu)).
 
 ---
 
@@ -84,11 +97,11 @@ Bu sayede gerçek API anahtarları olmadan da sistemin tamamı uçtan uca test e
 |---|---|---|
 | Runtime / Dil | .NET 8, C# | |
 | Veritabanı | MongoDB (Docker) | `MongoDB.Driver` ile erişim |
-| Zamanlama | Hangfire (Hangfire.Mongo) | Web dashboard dahil, iki recurring job |
+| Zamanlama | Hangfire (Hangfire.Mongo) | Web dashboard dahil, iki recurring job, eşzamanlı çalışma kilidi |
 | AI Analiz | Anthropic API — Claude Sonnet 4.6 | Model: `claude-sonnet-4-6`, çoklu dil destekli |
 | Dayanıklılık | Polly | Retry/backoff (2sn/4sn/8sn, 3 deneme) |
 | Loglama | Serilog | Console + günlük rotasyonlu dosya |
-| Bildirim | Slack (Block Kit) | `SlackApiNotifier` ile gerçek `chat.postMessage` entegrasyonu |
+| Bildirim | Slack (Block Kit) | `SlackApiNotifier` ile gerçek `chat.postMessage` — production'da aktif |
 | Sağlık Kontrolü | ASP.NET Core HealthChecks | MongoDB bağlantı kontrolü, `/health` endpoint'i |
 | Test | xUnit | 27 test |
 
@@ -100,20 +113,21 @@ Bu sayede gerçek API anahtarları olmadan da sistemin tamamı uçtan uca test e
 store_review_agent/
 ├── ReviewAgent.Worker/          → Ana host, Hangfire, DI kurulumu, Program.cs
 │   └── Jobs/
-│       ├── IngestionJob.cs              → Zamanlanmış ana ingestion akışı (günlük)
+│       ├── IngestionJob.cs              → Zamanlanmış ana ingestion akışı (günlük, eşzamanlılık korumalı)
 │       ├── WeeklySummaryJob.cs          → Haftalık özet job'ı
 │       ├── IngestionStatsCalculator.cs  → İstatistik hesaplama (test edilebilir, izole)
 │       └── ReviewBatchLimiter.cs        → Tur başına yorum sayısı sınırlama
 ├── ReviewAgent.Connectors/      → App Store & Google Play provider'ları
-│   ├── AppStore/
-│   ├── GooglePlay/
-│   ├── MockData/                → Mock/demo JSON veri setleri
-│   └── Resilience/               → Polly retry politikaları
-├── ReviewAgent.AI/              → Sentiment analiz interface + implementasyonlar
-├── ReviewAgent.Data/            → MongoDB modelleri ve repository'ler
-├── ReviewAgent.Slack/           → Block Kit mesaj builder'ları + notifier'lar
-├── ReviewAgent.Tests/           → xUnit testleri
-└── docker-compose.yml           → Local MongoDB kurulumu
+│   ├── AppStore/                 → Hazır, şu an kullanılmıyor (kapsam dışı)
+│   ├── GooglePlay/                → AKTİF
+│   ├── MockData/                 → Mock/demo JSON veri setleri
+│   └── Resilience/                → Polly retry politikaları
+├── ReviewAgent.AI/               → Sentiment analiz interface + implementasyonlar
+├── ReviewAgent.Data/             → MongoDB modelleri ve repository'ler
+│   └── secrets/                  → Google Play service account key (gitignore'da, repoya girmez)
+├── ReviewAgent.Slack/            → Block Kit mesaj builder'ları + notifier'lar
+├── ReviewAgent.Tests/            → xUnit testleri
+└── docker-compose.yml            → Local MongoDB kurulumu
 ```
 
 ---
@@ -148,7 +162,9 @@ dotnet build
 
 ### 4. Secrets kurulumu
 
-Proje, API anahtarlarını **kesinlikle koda veya `appsettings.json`'a yazmaz**. Development ortamında `dotnet user-secrets` kullanılır:
+Proje, API anahtarlarını **kesinlikle koda veya `appsettings.json`'a yazmaz**.
+
+**Development ortamında** `dotnet user-secrets` kullanılır:
 
 ```powershell
 cd ReviewAgent.Worker
@@ -158,11 +174,9 @@ dotnet user-secrets set "Slack:BotToken" "<slack-bot-token>"
 dotnet user-secrets set "Slack:DefaultChannelId" "<slack-channel-id>"
 ```
 
-App Store Connect ve Google Play credential'ları henüz production'a bağlanmadı (bkz. [Proje Durumu](#proje-durumu)); geldiğinde aynı şekilde `user-secrets` ile eklenecek.
+**Google Play service account key'i** repo kökünde `secrets/google-play-service-account.json` dosyasına yerleştirilir (bu klasör `.gitignore`'dadır, repoya asla girmez). Dosya yoksa sistem otomatik olarak mock Google Play verisine düşer, çökmez.
 
-> **Not:** `user-secrets`, proje klasörünün tamamen dışında (`%APPDATA%\Microsoft\UserSecrets\<proje-id>\`) tutulur, repoya asla girmez. `.gitignore` içinde ayrıca `appsettings.Development.json`, `*.p8` ve `secrets/` gibi girişler de bulunur.
-
-Anthropic veya Slack key'leri tanımlı değilse sistem otomatik olarak sırasıyla `MockSentimentAnalyzer` / `ConsoleSlackNotifier`'a düşer, çökmez.
+> **Not:** `user-secrets`, proje klasörünün tamamen dışında (`%APPDATA%\Microsoft\UserSecrets\<proje-id>\`) tutulur, repoya asla girmez.
 
 ---
 
@@ -174,9 +188,9 @@ dotnet run --project ReviewAgent.Worker
 
 İlk çalıştırmada:
 1. MongoDB index'leri oluşturulur (`EnsureIndexesAsync`) — `reviews` ve `alert_log` üzerinde unique index'ler dahil
-2. Uygulama kayıtları seed edilir (`SeedData.RunAsync` — Bithero test uygulaması dahil)
+2. Uygulama kayıtları seed edilir (`SeedData.RunAsync` — Kripto ve Hisse aktif, gerçek paket adlarıyla)
 3. Hangfire recurring job'ları tanımlanır:
-   - `ingestion-job` — her 5 dakikada bir (`*/5 * * * *`)
+   - `ingestion-job` — her 5 dakikada bir (`*/5 * * * *`), eşzamanlı çalışmaya karşı kilitli
    - `weekly-summary-job` — her Pazartesi 09:00 (`0 9 * * 1`)
 4. Web sunucusu `http://localhost:5000` üzerinde ayağa kalkar
 
@@ -208,6 +222,8 @@ http://localhost:5000/hangfire
 
 > Local MongoDB standalone (replica set değil) olduğu için Hangfire.Mongo change stream yerine **polling** moduna düşer. Bu, işlevi etkilemez, yalnızca MongoDB loglarında zararsız bir uyarı olarak görünür.
 
+> **Dikkat:** `ingestion-job`'ı dashboard'dan elle tetiklerken **tek bir kez** tıklamak yeterli — `[DisableConcurrentExecution]` koruması olsa da, gereksiz çift tetikleme kaynakları boşuna tüketir (gerçek AI/Slack çağrıları dahil).
+
 ---
 
 ## Health Check
@@ -230,22 +246,13 @@ MongoDB erişilemez durumdaysa `HTTP 503` ve `"status":"Unhealthy"` döner — b
 
 ### `MockReviewProvider`
 
-`ReviewAgent.Connectors/MockData/reviews_appstore.json` ve `reviews_googleplay.json` dosyalarından, her biri 30'ar adet olmak üzere toplam 60 gerçekçi örnek yorum okur. Gerçek API anahtarları gelene kadar tüm geliştirme ve test bu veri seti üzerinden yapılır. Bu 60 kaydın tamamı, geriye dönük bir backfill işlemiyle gerçek Claude Sonnet 4.6 ile analiz edilmiştir.
+`ReviewAgent.Connectors/MockData/reviews_appstore.json` ve `reviews_googleplay.json` dosyalarından, her biri 30'ar adet olmak üzere toplam 60 gerçekçi örnek yorum okur. Google Play credential'ları gelmeden önce tüm geliştirme ve test bu veri seti üzerinden yapılmıştır; 60 kaydın tamamı geriye dönük bir backfill işlemiyle gerçek Claude Sonnet 4.6 ile analiz edilmiştir. Artık production'da gerçek Google Play verisi kullanıldığı için bu mock veri seti yalnızca test/geliştirme amaçlı bir referans olarak kalmıştır.
 
 ### `LiveDemoReviewProvider` — yalnızca sunum amaçlı
 
 `reviews_live_demo.json` şablonundaki 3 örnek yorumu, **her çağrıldığında güncel zaman damgası ve benzersiz ID ile yeniden üretir**. Bu sayede `sync_state` filtresine takılmaz, her ingestion turunda "yeni gelmiş" gibi davranır — Hangfire dashboard'unda canlı hareket görmek için kullanılır.
 
-**Varsayılan olarak kapalıdır** (`ReviewAgent.Worker/Program.cs` içinde `liveDemoProvider: null`). Açmak için:
-
-```csharp
-// ReviewAgent.Worker/Program.cs içinde IngestionJob factory'sinde:
-LiveDemoReviewProvider liveDemoProvider = new(
-    Path.Combine(AppContext.BaseDirectory, "MockData", "reviews_live_demo.json"));
-// ... ve liveDemoProvider: null yerine liveDemoProvider ver
-```
-
-> **Dikkat:** Canlı demo modu açıkken, her Hangfire turu gerçek bir Anthropic API çağrısı VE gerçek bir Slack mesajı tetikler (3 yorum = 3 çağrı + Slack bildirimi). Sunum sonrası tekrar kapatılmalıdır.
+**Varsayılan olarak kapalıdır.** Açıldığında, her Hangfire turu gerçek bir Anthropic API çağrısı VE gerçek bir Slack mesajı tetikler. Sunum sonrası mutlaka tekrar kapatılmalıdır.
 
 ---
 
@@ -253,10 +260,10 @@ LiveDemoReviewProvider liveDemoProvider = new(
 
 MongoDB'deki dört koleksiyon:
 
-- **`apps`** — kayıtlı uygulamalar (isim, mağaza credential referansları, Slack kanalı, aktiflik durumu)
+- **`apps`** — kayıtlı uygulamalar (isim, mağaza credential referansları, Slack kanalı, aktiflik durumu). `AppStore`/`GooglePlay` alanlarından biri `null` olabilir — ingestion job'ı bu durumu kontrol edip yalnızca tanımlı olan platformu sorgular.
 - **`reviews`** — ham yorum + AI analiz sonucu (tek doküman, denormalize). `externalReviewId + platform + appId` üzerinde unique index (idempotency garantisi)
-- **`sync_state`** — her (uygulama, platform) çifti için son senkronizasyon zamanı; incremental ingestion'ı sağlar. Tur başına yorum limiti aşıldığında, işlenen en son yorumun tarihiyle güncellenir (`DateTime.UtcNow` ile değil) — böylece sınırı aşan yorumlar kaybolmaz, sıradaki tura düzgünce aktarılır
-- **`alert_log`** — kritik öncelikli (skor ≥ 4) yorumlar için gönderilen anlık uyarıları kaydeder, aynı yorum için tekrar bildirim gitmesini engeller
+- **`sync_state`** — her (uygulama, platform) çifti için son senkronizasyon zamanı; incremental ingestion'ı sağlar. Yalnızca uygulamanın gerçekten aktif olduğu platformlar için güncellenir.
+- **`alert_log`** — kritik öncelikli (skor ≥ 4) yorumlar için gönderilen anlık uyarıları kaydeder. Kayıt, **önce atomik olarak yazılır, yalnızca yazma başarılıysa Slack'e gönderilir** — bu sıralama, eşzamanlı iki job çalışmasında (örn. cron ile manuel tetikleme çakışması) aynı yorum için çift bildirim gitmesini engeller.
 
 Hangfire kendi verilerini ayrı bir veritabanında (`review_agent_hangfire`) tutar.
 
@@ -264,22 +271,24 @@ Hangfire kendi verilerini ayrı bir veritabanında (`review_agent_hangfire`) tut
 
 ## Dayanıklılık ve Güvenlik Önlemleri
 
-Sistem, gerçek dış servislerle (App Store, Google Play, Anthropic, Slack) çalışırken karşılaşılabilecek sorunlara karşı çok katmanlı bir koruma stratejisi izler:
+Sistem, gerçek dış servislerle (Google Play, Anthropic, Slack) çalışırken karşılaşılabilecek sorunlara karşı çok katmanlı bir koruma stratejisi izler. Bu önlemlerin bir kısmı, gerçek production verisiyle ilk çalıştırmalar sırasında karşılaşılan gerçek sorunlardan (aşağıda özetlenmiştir) sonra eklenmiştir:
 
 | Önlem | Katman | Açıklama |
 |---|---|---|
 | **Retry / backoff** | Connectors, AI | Polly ile geçici ağ hatalarında 3 deneme, üstel bekleme (2sn/4sn/8sn) |
 | **Yorum bazlı hata izolasyonu** | `IngestionJob` | Bir yorumun analizi başarısız olursa yalnızca o yorum atlanır (loglanarak), turun geri kalanı etkilenmez |
 | **Tur başına yorum limiti** | `IngestionJob` / `ReviewBatchLimiter` | Bir turda en fazla 50 yorum işlenir (`MaxReviewsPerRun`); aşan kısım veri kaybı olmadan sıradaki tura bırakılır |
+| **Eşzamanlı çalışma koruması** | `IngestionJob` | `[DisableConcurrentExecution]` ile aynı job'ın iki kopyasının aynı anda çalışması engellenir (cron + manuel tetikleme çakışması tespit edilip düzeltildi) |
+| **Atomik kritik alert kaydı** | `AlertLogRepository` | "Önce kaydet, başarılıysa gönder" deseni — check-then-act yerine MongoDB'nin unique index atomikliğine dayanır, çift bildirimi engeller |
 | **Idempotency** | `reviews`, `apps`, `alert_log` koleksiyonları | Unique index'ler sayesinde aynı kayıt tekrar tekrar işlenmez |
 | **Health check** | Worker (web host) | `/health` endpoint'i, MongoDB bağlantısını canlı olarak raporlar |
-| **Güvenli fallback** | AI, Slack | API anahtarı tanımlı değilse sistem çökmek yerine otomatik olarak mock implementasyona döner |
+| **Güvenli fallback** | AI, Slack, Google Play | API anahtarı/credential tanımlı değilse sistem çökmek yerine otomatik olarak mock implementasyona döner |
 
 ---
 
 ## Çoklu Dil Desteği
 
-BtcTurk uygulamaları global App Store/Google Play üzerinden erişilebilir olduğu için, yorumlar Türkçe dışında dillerde de (İngilizce, Arapça vb.) gelebilir. AI analiz prompt'u, girdi metninin dilinden bağımsız olarak **`summary` alanını her zaman Türkçe üretecek** şekilde tasarlanmıştır — bu, Slack raporlarının dil tutarlılığını (Türkçe konuşan ekip için) garanti eder. `sentiment`/`category`/`priority_score` alanları dilden etkilenmez.
+Google Play global erişime açık olduğu için, yorumlar Türkçe dışında dillerde de (İngilizce, Arapça vb.) gelebilir. AI analiz prompt'u, girdi metninin dilinden bağımsız olarak **`summary` alanını her zaman Türkçe üretecek** şekilde tasarlanmıştır — bu, Slack raporlarının dil tutarlılığını (Türkçe konuşan ekip için) garanti eder. `sentiment`/`category`/`priority_score` alanları dilden etkilenmez.
 
 Bu davranış, gerçek Claude Sonnet 4.6 çağrılarıyla (İngilizce ve Arapça örnek yorumlarla) doğrulanmıştır.
 
@@ -287,8 +296,9 @@ Bu davranış, gerçek Claude Sonnet 4.6 çağrılarıyla (İngilizce ve Arapça
 
 ## Bilinen Teknik Borçlar
 
-- **`GoogleCredential.FromFile` deprecated uyarısı** (`GooglePlayReviewProvider.cs`): Google'ın önerdiği `CredentialFactory` yöntemi, kullanılan paket sürümünde henüz stabil olmadığı için ertelendi. `#pragma warning disable CS0618` ile bilinçli olarak işaretlendi. Gerçek Google Play credential'ları entegre edilirken tekrar değerlendirilecek.
-- **Kritik alert mesajlarında gerçek yorum linki (`ReviewUrl`) henüz yok**: Mock veride gerçek bir App Store/Google Play linki üretilemediği için şu an `null`. Gerçek credential'lar geldiğinde, yorumun mağaza sayfasına giden linki oluşturulacak.
+- **`GoogleCredential.FromFile` deprecated uyarısı** (`GooglePlayReviewProvider.cs`): Google'ın önerdiği `CredentialFactory` yöntemi, kullanılan paket sürümünde henüz stabil olmadığı için ertelendi. `#pragma warning disable CS0618` ile bilinçli olarak işaretlendi.
+- **Kritik alert mesajlarında gerçek yorum linki (`ReviewUrl`) henüz yok**: Artık gerçek Google Play paket adları elimizde olduğu için (`https://play.google.com/store/apps/details?id={packageName}` pattern'i ile), bu kolayca eklenebilir — henüz yapılmadı.
+- **App Store entegrasyonu kapsam dışı**: Kod tamamen hazır ve test edilmiş, ancak güvenlik ekibi kararıyla şu an kullanılmıyor.
 
 ---
 
@@ -298,24 +308,23 @@ Bu davranış, gerçek Claude Sonnet 4.6 çağrılarıyla (İngilizce ve Arapça
 |---|---|
 | Solution iskeleti (6 proje) | ✅ Tamamlandı |
 | Docker + MongoDB | ✅ Tamamlandı |
-| App Store Connect connector | ✅ Kod hazır, gerçek credential bekleniyor |
-| Google Play connector | ✅ Kod hazır, gerçek credential bekleniyor |
+| Google Play connector | ✅ **Production'da gerçek veriyle çalışıyor** (Kripto, Hisse) |
+| App Store Connect connector | ✅ Kod hazır, kapsam dışı (güvenlik ekibi kararı) |
 | MongoDB veri katmanı (apps/reviews/sync_state/alert_log) | ✅ Tamamlandı, idempotency doğrulandı |
-| AI analiz (Claude Sonnet 4.6) | ✅ Tamamlandı, gerçek veriyle doğrulandı |
-| Mock veri setinin geriye dönük AI analizi (backfill) | ✅ Tamamlandı (60/60 kayıt) |
+| AI analiz (Claude Sonnet 4.6) | ✅ **Production'da gerçek veriyle çalışıyor** |
 | Çoklu dil desteği (özet her zaman Türkçe) | ✅ Tamamlandı, gerçek testle doğrulandı |
 | Slack mesaj formatlama | ✅ Tamamlandı, görsel doğrulandı |
-| **Gerçek Slack bildirimi (`SlackApiNotifier`)** | ✅ Tamamlandı, gerçek kanala mesaj gidiyor |
-| Kritik alert mekanizması (`alert_log`) | ✅ Tamamlandı, tekrar gönderim engelleniyor |
-| Günlük ingestion job'ı | ✅ Tamamlandı |
-| **Haftalık özet job'ı** | ✅ Tamamlandı |
+| Gerçek Slack bildirimi (`SlackApiNotifier`) | ✅ **Production'da gerçek kanala mesaj gidiyor** |
+| Kritik alert mekanizması (`alert_log`) | ✅ Tamamlandı, atomik yazma ile çift bildirim engelleniyor |
+| Günlük ingestion job'ı | ✅ **Production'da çalışıyor** |
+| Haftalık özet job'ı | ✅ Tamamlandı |
 | Hangfire zamanlama + dashboard | ✅ Tamamlandı |
+| Eşzamanlı çalışma koruması | ✅ Tamamlandı (gerçek bir race condition tespit edilip düzeltildi) |
 | Polly retry/backoff | ✅ Tamamlandı |
-| **Yorum bazlı hata izolasyonu** | ✅ Tamamlandı |
-| **Tur başına yorum limiti (rate limiting)** | ✅ Tamamlandı |
-| **Health check endpoint** | ✅ Tamamlandı, test edilmiş |
+| Yorum bazlı hata izolasyonu | ✅ Tamamlandı |
+| Tur başına yorum limiti (rate limiting) | ✅ Tamamlandı |
+| Health check endpoint | ✅ Tamamlandı, test edilmiş |
 | Serilog loglama | ✅ Tamamlandı |
-| Gerçek App Store/Google Play verisi | ⏳ Bithero credential'ları bekleniyor |
 
 ---
 
@@ -325,6 +334,6 @@ Commit mesajları [Conventional Commits](https://www.conventionalcommits.org/) f
 
 ```
 feat(connectors): App Store JWT kimlik dogrulamasi ekle
-fix(data): _id: null duplicate key hatasini duzelt
+fix(worker): ingestion job'da esisimanli calisma race condition'ini duzelt
 refactor(worker): IngestionJob'i DI ile yeniden yapilandir
 ```
