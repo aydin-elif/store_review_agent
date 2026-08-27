@@ -205,7 +205,7 @@ public class IngestionJob
             Platform = raw.Platform,
             Rating = raw.Rating,
             Summary = analysis.Summary,
-            ReviewUrl = null
+            ReviewUrl = StoreUrlBuilder.Build(app, raw.Platform)
         };
 
         SlackMessagePayload alertPayload = CriticalAlertMessageBuilder.Build(app.SlackChannel ?? "#store-reviews-test", alertInfo);

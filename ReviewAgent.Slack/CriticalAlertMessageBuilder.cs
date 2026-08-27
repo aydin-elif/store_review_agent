@@ -36,7 +36,7 @@ public static class CriticalAlertMessageBuilder
                     new
                     {
                         type = "button",
-                        text = new { type = "plain_text", text = "Yorumu Görüntüle" },
+                        text = new { type = "plain_text", text = "Mağaza Sayfasını Aç" },
                         url = alert.ReviewUrl
                     }
                 }
