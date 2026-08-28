@@ -328,6 +328,10 @@ Bu davranış, gerçek Claude Sonnet 4.6 çağrılarıyla (İngilizce ve Arapça
 
 ---
 
+
+📊 Proje sunumuna [buradan](docs/sunum.md) ulaşabilirsiniz.
+
+
 ## Katkı / Commit Standardı
 
 Commit mesajları [Conventional Commits](https://www.conventionalcommits.org/) formatında, İngilizce tip prefix'i + Türkçe açıklama ile yazılır:
